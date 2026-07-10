@@ -15,6 +15,7 @@ mod hurdles;
 mod leaderboard;
 pub mod messages;
 mod response_targets;
+mod race_control;
 mod routes;
 mod scoring;
 mod search;
@@ -80,6 +81,7 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 boss::create_message,
                 boss::clear_message,
                 boss::boss_status,
+                race_control::stats,
                 messages::get_detail,
                 messages::save_draft,
                 messages::send,
