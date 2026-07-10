@@ -51,6 +51,40 @@ pub enum MessageStatus {
     Skipped,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Sentiment {
+    Positive,
+    Neutral,
+    Negative,
+    Angry,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Urgency {
+    Critical,
+    High,
+    Normal,
+    Low,
+}
+
+/// One hit from the binoculars search/filter endpoint.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MessageSearchResult {
+    pub id: i64,
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+    pub status: MessageStatus,
+    pub category: Option<String>,
+    pub sentiment: Option<Sentiment>,
+    pub urgency: Option<Urgency>,
+    pub summary: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthResponse {
     pub status: String,
