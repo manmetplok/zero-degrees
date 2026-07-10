@@ -9,12 +9,14 @@ use shared::MessageStatus;
 
 use crate::assets::{Assets, GROUND_FRAC};
 use crate::card::{CardAction, CardHost};
+use crate::hub::{Hub, TrackGeom};
 use crate::inbox;
 use crate::input::{Gesture, GestureDetector};
 use crate::meta;
 use crate::profile::Profile;
 use crate::progress::{self, Day};
 use crate::score::Score;
+use crate::team;
 use crate::track::Track;
 use crate::view;
 
@@ -59,6 +61,8 @@ pub struct Game {
     card_pending: bool,
     /// Persisted progression (streaks, trophies) and its UI overlays.
     profile: Profile,
+    /// Team screens, navigation, and the mock team simulation (hub.rs).
+    hub: Hub,
 }
 
 /// Floating "+XP" text rising from a cleared hurdle.
@@ -133,6 +137,7 @@ impl Game {
             cards: CardHost::new(),
             card_pending: false,
             profile: Profile::load(Day::from_unix(world_now())),
+            hub: Hub::new(),
         }
     }
 
@@ -172,8 +177,14 @@ impl Game {
     pub fn frame(&mut self) {
         let dt = get_frame_time();
         let lay = Layout::current();
+        // Team simulation + screen routing (hub.rs). When a non-track screen
+        // is active the hub owns the whole frame.
+        if self.hub.frame(dt, &mut self.track, &self.score, &mut self.gestures) {
+            return;
+        }
         self.update(dt, &lay);
         self.draw(&lay);
+        self.hub.track_overlay(lay.w, lay.h);
     }
 
     fn update(&mut self, dt: f32, lay: &Layout) {
@@ -205,7 +216,17 @@ impl Game {
         }
         match self.gestures.poll() {
             Gesture::Tap(pos) => {
-                if self.profile.handle_tap(pos, lay.w, lay.h) {
+                let geom = TrackGeom {
+                    w: lay.w,
+                    h: lay.h,
+                    unit: lay.unit,
+                    anchor_x: lay.anchor_x,
+                    ground_y: lay.ground_y,
+                    cam_x: self.cam_x,
+                };
+                if self.hub.track_tap(pos, geom, &mut self.track) {
+                    // Consumed by nav, filter chrome, or hurdle assignment.
+                } else if self.profile.handle_tap(pos, lay.w, lay.h) {
                     // Streak pill tapped: profile opened its trophy room.
                 } else if self.ingest_button_rect(lay).contains(pos) {
                     self.simulate_incoming();
@@ -569,7 +590,9 @@ impl Game {
                 category: m.category,
                 urgency: m.urgency,
                 sentiment: m.sentiment,
-                faded: !open,
+                // Hurdles outside the active filter (hub.rs) dim like
+                // resolved ones.
+                faded: !open || !self.hub.filter_matches(&h.message),
                 down: h.message.status == MessageStatus::Cleared,
                 marked: h.message.status == MessageStatus::Skipped,
                 burning: open && meta::is_overdue(m.urgency, waited),
@@ -583,6 +606,12 @@ impl Game {
                 }),
             };
             view::hurdle(x, lay.ground_y + drop, lay.unit, &style, now as f32);
+            // Assignee avatar on the baton owner's hurdle (story 013).
+            if h.message.status != MessageStatus::Cleared {
+                if let Some(runner) = self.hub.assignee(h.message.id) {
+                    team::hurdle_avatar(x, lay.ground_y + drop, lay.unit, runner);
+                }
+            }
         }
     }
 
