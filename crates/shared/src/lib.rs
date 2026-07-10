@@ -93,3 +93,66 @@ pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
 }
+
+/// Which AI-generated output a feedback rating applies to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AiFeature {
+    Category,
+    Urgency,
+    Summary,
+    DraftReply,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedbackRating {
+    Helpful,
+    Unhelpful,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateAiFeedback {
+    pub feature: AiFeature,
+    /// The hurdle/message the AI output was generated for, when known.
+    pub message_id: Option<i64>,
+    pub ai_output: String,
+    /// The player's final version, when the feature allows editing (e.g. a rewritten draft reply
+    /// or a corrected category). Absent for feedback on features with no player-editable output.
+    pub final_value: Option<String>,
+    pub rating: FeedbackRating,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiFeedback {
+    pub id: i64,
+    pub feature: AiFeature,
+    pub message_id: Option<i64>,
+    pub ai_output: String,
+    pub final_value: Option<String>,
+    pub rating: FeedbackRating,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeatureFeedbackSummary {
+    pub feature: AiFeature,
+    pub helpful: i64,
+    pub unhelpful: i64,
+    pub helpful_ratio: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeedbackTrendPoint {
+    pub date: String,
+    pub feature: AiFeature,
+    pub helpful: i64,
+    pub unhelpful: i64,
+    pub helpful_ratio: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeedbackAggregate {
+    pub by_feature: Vec<FeatureFeedbackSummary>,
+    pub trend: Vec<FeedbackTrendPoint>,
+}
