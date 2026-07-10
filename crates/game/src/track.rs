@@ -111,7 +111,7 @@ impl Track {
             return false;
         }
         // Constant running speed with a soft arrival.
-        let speed = (gap.abs() * 2.5).clamp(1.0, 8.0);
+        let speed = (gap.abs() * 3.0).clamp(2.2, 9.0);
         self.runner_at += gap.signum() * (speed * dt).min(gap.abs());
         true
     }

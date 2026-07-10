@@ -69,14 +69,23 @@ cam.location = (8, (lo[1] + hi[1]) / 2, view_h / 2 - GROUND_FRAC * view_h)
 cam.rotation_euler = (math.radians(90), 0, math.radians(90))
 scene.camera = cam
 
+# Key light from the camera side (+X) so the visible flank is lit.
 sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
 sun.data.energy = 3.0
 scene.collection.objects.link(sun)
-sun.rotation_euler = (math.radians(50), math.radians(-20), math.radians(40))
+sun.rotation_euler = (math.radians(55), 0, math.radians(115))
 fill = bpy.data.objects.new("fill", bpy.data.lights.new("fill", "SUN"))
-fill.data.energy = 1.2
+fill.data.energy = 1.0
 scene.collection.objects.link(fill)
-fill.rotation_euler = (math.radians(60), math.radians(20), math.radians(220))
+fill.rotation_euler = (math.radians(60), 0, math.radians(250))
+
+# Flat ambient so shadowed areas keep color instead of going black.
+world = bpy.data.worlds.new("world")
+scene.world = world
+world.use_nodes = True
+bg = world.node_tree.nodes["Background"]
+bg.inputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
+bg.inputs[1].default_value = 0.7
 
 scene.render.engine = (
     "BLENDER_EEVEE_NEXT"

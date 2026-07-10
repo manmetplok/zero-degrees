@@ -86,6 +86,18 @@ impl Game {
         }
     }
 
+    /// Scripted actions for the ZD_DEMO dev harness (see main.rs): exercises
+    /// clear, skip, and mid-run ingestion without real input.
+    pub fn demo_tick(&mut self, frame: u32) {
+        match frame {
+            30 => self.clear_hurdle(),
+            170 => self.skip_hurdle(),
+            180 => self.simulate_incoming(),
+            260 => self.clear_hurdle(),
+            _ => {}
+        }
+    }
+
     pub fn frame(&mut self) {
         let dt = get_frame_time();
         let lay = Layout::current();
@@ -111,8 +123,18 @@ impl Game {
             }
             Gesture::None => {}
         }
+        // Desktop dev shortcuts mirroring the touch gestures.
         if is_key_pressed(KeyCode::N) {
             self.simulate_incoming();
+        }
+        if is_key_pressed(KeyCode::A) || is_key_pressed(KeyCode::Right) {
+            self.approach();
+        }
+        if is_key_pressed(KeyCode::C) || is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Up) {
+            self.clear_hurdle();
+        }
+        if is_key_pressed(KeyCode::S) || is_key_pressed(KeyCode::Left) {
+            self.skip_hurdle();
         }
 
         // Runner physics.
@@ -361,7 +383,7 @@ impl Game {
                 draw_rectangle(pad, card_y, lay.w * 0.012, card_h, color);
                 view::channel_icon(x + fs * 0.6, card_y + fs * 1.9, fs * 1.3, h.message.channel, color);
                 draw_text(
-                    &format!("{}  ·  {}", h.message.channel.label(), h.message.sender),
+                    format!("{}  ·  {}", h.message.channel.label(), h.message.sender),
                     x + fs * 1.8,
                     card_y + fs * 2.3,
                     fs * 0.9,
