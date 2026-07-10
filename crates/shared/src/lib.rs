@@ -78,3 +78,17 @@ pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReplyDraft {
+    pub id: i64,
+    pub message_id: i64,
+    pub content: String,
+    pub steering_note: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RechargeDraft {
+    pub steering_note: String,
+}
