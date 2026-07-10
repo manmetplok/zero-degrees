@@ -1,9 +1,26 @@
 mod assets;
+mod binoculars;
+mod boss;
+mod card;
+mod dashboard;
+mod feedback;
+mod filter;
 mod game;
+mod hazards;
+mod hub;
 mod inbox;
 mod input;
+mod leaderboard;
+mod meta;
+mod profile;
+mod progress;
+mod reply;
+mod save;
 mod score;
+mod screens;
+mod team;
 mod track;
+mod trophies;
 mod view;
 
 use macroquad::prelude::*;
@@ -45,10 +62,14 @@ async fn main() {
         frames += 1;
         if let Some(path) = &shot {
             if demo {
-                if let Some(n) = [90u32, 210, 330].iter().position(|f| *f == frames) {
+                // Shots 1-3 land on the scout card, revealed draft, and the
+                // send jump; 4 and 5 capture the progression overlays
+                // (trophy celebration, trophy room) staged by demo_tick.
+                const SHOT_FRAMES: [u32; 5] = [160, 320, 500, 700, 850];
+                if let Some(n) = SHOT_FRAMES.iter().position(|f| *f == frames) {
                     get_screen_data()
                         .export_png(&path.replace(".png", &format!("_{}.png", n + 1)));
-                    if n == 2 {
+                    if n == SHOT_FRAMES.len() - 1 {
                         return;
                     }
                 }
