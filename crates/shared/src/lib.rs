@@ -31,7 +31,7 @@ impl Channel {
 }
 
 /// An incoming customer message. One open message = one hurdle on the track.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub id: u64,
     pub channel: Channel,
@@ -77,4 +77,25 @@ pub struct TrackObject {
 pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveDraftRequest {
+    pub draft: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendReplyRequest {
+    pub reply: String,
+}
+
+/// Full state of a message as tracked by the backend: the message itself
+/// plus the reply lifecycle (draft in progress, sent reply, points, resolution).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MessageDetail {
+    pub message: Message,
+    pub draft: Option<String>,
+    pub reply: Option<String>,
+    pub points_awarded: i64,
+    pub resolved_at: Option<String>,
 }

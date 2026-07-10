@@ -2,6 +2,7 @@
 extern crate rocket;
 
 pub mod db;
+mod messages;
 mod routes;
 mod track_objects;
 
@@ -16,6 +17,9 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
             track_objects::create,
             track_objects::list,
             track_objects::delete,
+            messages::get,
+            messages::save_draft,
+            messages::send,
         ],
     )
 }
