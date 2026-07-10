@@ -1,3 +1,17 @@
 [workspace]
 resolver = "2"
-members = ["crates/shared", "crates/backend"]
+members = ["crates/game", "crates/shared", "crates/backend"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
