@@ -12,6 +12,8 @@ use crate::card::{CardAction, CardHost};
 use crate::inbox;
 use crate::input::{Gesture, GestureDetector};
 use crate::meta;
+use crate::profile::Profile;
+use crate::progress::{self, Day};
 use crate::score::Score;
 use crate::track::Track;
 use crate::view;
@@ -55,6 +57,8 @@ pub struct Game {
     cards: CardHost,
     /// A tapped hurdle opens its card once the runner arrives (story 006).
     card_pending: bool,
+    /// Persisted progression (streaks, trophies) and its UI overlays.
+    profile: Profile,
 }
 
 /// Floating "+XP" text rising from a cleared hurdle.
@@ -64,6 +68,13 @@ struct Popup {
     world_x: f32,
     /// get_time() when spawned.
     at: f64,
+}
+
+/// Mock world clock: fake unix time advancing with the session, anchored
+/// just past the newest sample message. Progression derives "today" from
+/// this instead of the wall clock (see progress.rs).
+fn world_now() -> i64 {
+    progress::MOCK_WORLD_EPOCH + get_time() as i64
 }
 
 /// "2" for whole multipliers, "1.5" otherwise.
@@ -121,6 +132,7 @@ impl Game {
             responses: meta::ResponseLog::default(),
             cards: CardHost::new(),
             card_pending: false,
+            profile: Profile::load(Day::from_unix(world_now())),
         }
     }
 
@@ -132,9 +144,11 @@ impl Game {
 
     /// Scripted actions for the ZD_DEMO dev harness (see main.rs): walks the
     /// full card flow — open card, power-up draft, recharge with a steering
-    /// note, swipe-up send — without real input. Frame numbers leave slack
-    /// for the wall-clock walk-up and charge animations at 60 or 120 fps, so
-    /// the shots land on the scout card, the revealed draft, and the jump.
+    /// note, swipe-up send — then the progression overlays (trophy
+    /// celebration, trophy room), without real input. Frame numbers leave
+    /// slack for the wall-clock walk-up and charge animations at 60 or 120
+    /// fps, so the shots land on the scout card, the revealed draft, the
+    /// jump, the celebration, and the trophy room.
     pub fn demo_tick(&mut self, frame: u32) {
         match frame {
             20 => self.clear_hurdle(), // now opens the review card on arrival
@@ -143,6 +157,13 @@ impl Game {
             480 => {
                 let action = self.cards.demo_send(get_time());
                 self.apply_card_action(action);
+            }
+            560 => self.skip_hurdle(),
+            575 => self.simulate_incoming(),
+            640 => self.profile.demo_celebrate(get_time()),
+            780 => {
+                self.profile.dismiss(get_time());
+                self.profile.toggle_room();
             }
             _ => {}
         }
@@ -156,6 +177,22 @@ impl Game {
     }
 
     fn update(&mut self, dt: f32, lay: &Layout) {
+        // Progression bookkeeping; while the trophy room or a celebration is
+        // up, any tap or key dismisses it and gameplay input is swallowed.
+        let now = get_time();
+        self.profile.tick(Day::from_unix(world_now()), now);
+        if self.profile.overlay_active() {
+            if matches!(self.gestures.poll(), Gesture::Tap(_))
+                || is_key_pressed(KeyCode::Space)
+                || is_key_pressed(KeyCode::P)
+                || is_key_pressed(KeyCode::Escape)
+            {
+                self.profile.dismiss(now);
+            }
+            self.follow_camera(dt);
+            self.popups.retain(|p| now - p.at < POPUP_LIFE);
+            return;
+        }
         // While the detail card is open it captures all input and the run
         // idles underneath (stories 006-008). An approved send fires the
         // jump via apply_card_action; backing out changes nothing.
@@ -168,7 +205,9 @@ impl Game {
         }
         match self.gestures.poll() {
             Gesture::Tap(pos) => {
-                if self.ingest_button_rect(lay).contains(pos) {
+                if self.profile.handle_tap(pos, lay.w, lay.h) {
+                    // Streak pill tapped: profile opened its trophy room.
+                } else if self.ingest_button_rect(lay).contains(pos) {
                     self.simulate_incoming();
                 } else if self.retype_chip_rect(lay).is_some_and(|r| r.contains(pos)) {
                     self.retype_faced();
@@ -203,6 +242,9 @@ impl Game {
         }
         if is_key_pressed(KeyCode::T) {
             self.retype_faced();
+        }
+        if is_key_pressed(KeyCode::P) {
+            self.profile.toggle_room();
         }
         if is_key_pressed(KeyCode::F) {
             self.track.free_run = !self.track.free_run;
@@ -355,6 +397,18 @@ impl Game {
             on_time,
         });
         let reward = self.score.on_clear(meta::clear_xp(m.urgency, waited), now);
+        // Progression (stories 016/018): burning state and response time come
+        // from the real triage data (story 014).
+        let event = progress::ClearEvent {
+            message_id: id,
+            urgency: m.urgency,
+            sentiment: m.sentiment,
+            was_burning: !on_time,
+            response_seconds: waited as f64,
+            track_cleared: self.track.remaining() == 0,
+            at: world_now(),
+        };
+        self.profile.on_clear(&event, reward.xp, now);
         let mut text = if reward.multiplier > 1.0 {
             format!("+{} XP  x{}", reward.xp, mult_label(reward.multiplier))
         } else {
@@ -415,10 +469,13 @@ impl Game {
         self.draw_runner(lay);
         self.draw_popups(lay);
         self.draw_hud(lay);
+        self.profile.draw_hud(lay.w, lay.h, get_time());
         self.draw_combo(lay);
         self.draw_card(lay);
-        // Detail overlay on top of everything (stories 006-008).
+        // Detail overlay on top of everything (stories 006-008); the
+        // full-screen progression celebration wins over even that.
         self.cards.draw();
+        self.profile.draw_overlays(lay.w, lay.h, get_time());
     }
 
     fn draw_popups(&self, lay: &Layout) {
