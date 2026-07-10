@@ -218,11 +218,14 @@ mod tests {
     use shared::{Channel, Message};
 
     fn track_for(difficulty: Difficulty) -> Track {
-        Track::new(generate_course(&CourseSpec {
-            seed: 42,
-            difficulty,
-            count: 50,
-        }))
+        Track::new(
+            generate_course(&CourseSpec {
+                seed: 42,
+                difficulty,
+                count: 50,
+            }),
+            crate::meta::demo_now(0.0),
+        )
     }
 
     #[test]
@@ -233,7 +236,10 @@ mod tests {
             .iter()
             .find(|z| z.title == "Checkout failures")
             .expect("nightmare course must surface the checkout spike");
-        assert!(checkout.open >= 10, "spike too small: {}", checkout.open);
+        // Priority layout (story 009) interleaves a few other critical
+        // hurdles into the spike, so the contiguous run is smaller than the
+        // 14 generated checkout messages.
+        assert!(checkout.open >= 8, "spike too small: {}", checkout.open);
         assert!(checkout.end > checkout.start);
         assert!(checkout.label().contains("Checkout failures ·"));
         // The zone groups real checkout hurdles.
@@ -293,7 +299,7 @@ mod tests {
             for m in messages.iter_mut().take(cleared) {
                 m.status = MessageStatus::Cleared;
             }
-            Track::new(messages)
+            Track::new(messages, crate::meta::demo_now(0.0))
         };
         assert_eq!(detect_zones(&build(0).hurdles).len(), 1);
         assert_eq!(detect_zones(&build(1).hurdles).len(), 1);
@@ -318,6 +324,6 @@ mod tests {
             });
         }
         messages.push(checkoutish(7, MessageStatus::Open));
-        assert!(detect_zones(&Track::new(messages).hurdles).is_empty());
+        assert!(detect_zones(&Track::new(messages, crate::meta::demo_now(0.0)).hurdles).is_empty());
     }
 }

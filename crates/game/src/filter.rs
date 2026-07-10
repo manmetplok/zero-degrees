@@ -13,24 +13,33 @@ use crate::meta::{self, Category, MessageMeta, Sentiment, Urgency};
 /// summaries mid-frame. Rebuilt whenever the track changes.
 pub struct MetaCache {
     map: HashMap<u64, MessageMeta>,
+    summaries: HashMap<u64, String>,
 }
 
 impl MetaCache {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
+            summaries: HashMap::new(),
         }
     }
 
     pub fn rebuild<'a>(&mut self, messages: impl Iterator<Item = &'a Message>) {
         self.map.clear();
+        self.summaries.clear();
         for m in messages {
             self.map.insert(m.id, meta::enrich(m));
+            self.summaries.insert(m.id, meta::summarize(m));
         }
     }
 
     pub fn get(&self, id: u64) -> Option<&MessageMeta> {
         self.map.get(&id)
+    }
+
+    /// The cached AI scout report for a message (story 006 output).
+    pub fn summary(&self, id: u64) -> Option<&str> {
+        self.summaries.get(&id).map(String::as_str)
     }
 }
 

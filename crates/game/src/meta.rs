@@ -67,12 +67,13 @@ impl Category {
 }
 
 /// How time-critical a message is; rendered as hurdle height (story 004).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Declared lowest-first so `Ord` ranks by urgency (`max()` = most urgent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Urgency {
-    Critical,
-    High,
-    Normal,
     Low,
+    Normal,
+    High,
+    Critical,
 }
 
 impl Urgency {
@@ -129,6 +130,14 @@ pub enum Sentiment {
 }
 
 impl Sentiment {
+    /// Display order for filter chips and breakdowns.
+    pub const ALL: [Sentiment; 4] = [
+        Sentiment::Positive,
+        Sentiment::Neutral,
+        Sentiment::Negative,
+        Sentiment::Angry,
+    ];
+
     pub fn label(self) -> &'static str {
         match self {
             Sentiment::Positive => "positive",

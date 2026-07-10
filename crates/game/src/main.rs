@@ -1,9 +1,12 @@
 mod assets;
+mod binoculars;
 mod boss;
 mod card;
 mod dashboard;
 mod feedback;
+mod filter;
 mod game;
+mod hazards;
 mod hub;
 mod inbox;
 mod input;

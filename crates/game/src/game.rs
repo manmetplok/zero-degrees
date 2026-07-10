@@ -8,6 +8,7 @@ use macroquad::prelude::*;
 use shared::MessageStatus;
 
 use crate::assets::{Assets, GROUND_FRAC};
+use crate::binoculars::{self, Binoculars, Viewport};
 use crate::card::{CardAction, CardHost};
 use crate::hub::{Hub, TrackGeom};
 use crate::inbox;
@@ -63,6 +64,10 @@ pub struct Game {
     profile: Profile,
     /// Team screens, navigation, and the mock team simulation (hub.rs).
     hub: Hub,
+    /// Which demo course is laid out (seed + difficulty preset), story 002.
+    course: inbox::CourseSpec,
+    /// Search/filter overlay and hazard zones (stories 010 and 012).
+    lens: Binoculars,
 }
 
 /// Floating "+XP" text rising from a cleared hurdle.
@@ -120,9 +125,12 @@ impl Layout {
 
 impl Game {
     pub fn new(assets: Assets) -> Self {
+        let course = inbox::CourseSpec::from_env();
+        let track = Track::new(inbox::generate_course(&course), meta::demo_now(0.0));
+        let lens = Binoculars::new(&track);
         Self {
             assets,
-            track: Track::new(inbox::sample_messages(8), meta::demo_now(0.0)),
+            track,
             phase: Phase::Waiting,
             gestures: GestureDetector::new(),
             cam_x: 0.0,
@@ -138,6 +146,8 @@ impl Game {
             card_pending: false,
             profile: Profile::load(Day::from_unix(world_now())),
             hub: Hub::new(),
+            course,
+            lens,
         }
     }
 
@@ -145,6 +155,48 @@ impl Game {
     #[allow(dead_code)] // read by the race-control screen (story 011)
     pub fn feedback(&self) -> &crate::feedback::FeedbackStore {
         self.cards.feedback()
+    }
+
+    fn viewport(&self, lay: &Layout) -> Viewport {
+        Viewport {
+            w: lay.w,
+            h: lay.h,
+            unit: lay.unit,
+            ground_y: lay.ground_y,
+            anchor_x: lay.anchor_x,
+            cam_x: self.cam_x,
+        }
+    }
+
+    /// Apply a binoculars interaction (camera jump, course relay/preset).
+    fn apply_lens(&mut self, action: binoculars::Action) {
+        match action {
+            binoculars::Action::JumpTo(x) => {
+                self.cam_x = x.clamp(-1.0, self.track.finish_at());
+                self.scroll_hold = 2.5;
+            }
+            binoculars::Action::Relay => {
+                self.course = self.course.reseeded();
+                self.rebuild_course();
+            }
+            binoculars::Action::CycleDifficulty => {
+                self.course.difficulty = self.course.difficulty.next();
+                self.rebuild_course();
+            }
+        }
+    }
+
+    /// The story-002 reset flag: clear the old course and lay out a new one.
+    fn rebuild_course(&mut self) {
+        self.track = Track::new(inbox::generate_course(&self.course), meta::demo_now(get_time()));
+        self.phase = Phase::Waiting;
+        self.cam_x = 0.0;
+        self.scroll_hold = 0.0;
+        self.spawned_at.clear();
+        self.popups.clear();
+        self.cleared = 0;
+        self.score = Score::new();
+        self.lens.refresh(&self.track);
     }
 
     /// Scripted actions for the ZD_DEMO dev harness (see main.rs): walks the
@@ -214,7 +266,19 @@ impl Game {
             self.follow_camera(dt);
             return;
         }
-        match self.gestures.poll() {
+        // The binoculars get first pick of gestures and keys: overlay input,
+        // zone-banner taps, and course controls happen there.
+        let vp = self.viewport(lay);
+        let gesture = match self.lens.intercept(self.gestures.poll(), &vp, &self.track) {
+            binoculars::Outcome::Pass(g) => g,
+            binoculars::Outcome::Handled(action) => {
+                if let Some(action) = action {
+                    self.apply_lens(action);
+                }
+                Gesture::None
+            }
+        };
+        match gesture {
             Gesture::Tap(pos) => {
                 let geom = TrackGeom {
                     w: lay.w,
@@ -248,18 +312,21 @@ impl Game {
             }
             Gesture::None => {}
         }
-        // Desktop dev shortcuts mirroring the touch gestures.
-        if is_key_pressed(KeyCode::N) {
-            self.simulate_incoming();
-        }
-        if is_key_pressed(KeyCode::A) || is_key_pressed(KeyCode::Right) {
-            self.approach();
-        }
-        if is_key_pressed(KeyCode::C) || is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Up) {
-            self.clear_hurdle();
-        }
-        if is_key_pressed(KeyCode::S) || is_key_pressed(KeyCode::Left) {
-            self.skip_hurdle();
+        // Desktop dev shortcuts mirroring the touch gestures. Disabled while
+        // the binoculars overlay owns the keyboard for text search.
+        if !self.lens.is_open() {
+            if is_key_pressed(KeyCode::N) {
+                self.simulate_incoming();
+            }
+            if is_key_pressed(KeyCode::A) || is_key_pressed(KeyCode::Right) {
+                self.approach();
+            }
+            if is_key_pressed(KeyCode::C) || is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Up) {
+                self.clear_hurdle();
+            }
+            if is_key_pressed(KeyCode::S) || is_key_pressed(KeyCode::Left) {
+                self.skip_hurdle();
+            }
         }
         if is_key_pressed(KeyCode::T) {
             self.retype_faced();
@@ -408,6 +475,7 @@ impl Game {
             return;
         }
         self.cleared += 1;
+        self.lens.refresh(&self.track);
         let waited = now_ts - received_at;
         let on_time = !meta::is_overdue(m.urgency, waited);
         self.responses.record(meta::ResponseRecord {
@@ -450,6 +518,7 @@ impl Game {
         self.scroll_hold = 0.0;
         self.track
             .resolve_next(MessageStatus::Skipped, meta::demo_now(get_time()));
+        self.lens.refresh(&self.track);
         self.phase = Phase::Running;
     }
 
@@ -470,6 +539,7 @@ impl Game {
         let msg = inbox::next_incoming(&existing);
         let id = msg.id;
         self.track.add_message(msg, meta::demo_now(get_time()));
+        self.lens.refresh(&self.track);
         self.spawned_at.insert(id, get_time());
         if matches!(self.phase, Phase::Celebrating) {
             self.phase = Phase::Waiting;
@@ -484,17 +554,21 @@ impl Game {
     // ---- drawing ----
 
     fn draw(&self, lay: &Layout) {
+        let vp = self.viewport(lay);
         clear_background(view::SKY);
         self.draw_track(lay);
         self.draw_hurdles(lay);
+        self.lens.draw_world(&vp);
         self.draw_runner(lay);
         self.draw_popups(lay);
         self.draw_hud(lay);
         self.profile.draw_hud(lay.w, lay.h, get_time());
         self.draw_combo(lay);
         self.draw_card(lay);
-        // Detail overlay on top of everything (stories 006-008); the
-        // full-screen progression celebration wins over even that.
+        // Search overlay covers the HUD when open; the detail card sits on
+        // top of that, and the full-screen progression celebration wins over
+        // everything.
+        self.lens.draw_ui(&vp, &self.track, &self.course);
         self.cards.draw();
         self.profile.draw_overlays(lay.w, lay.h, get_time());
     }
@@ -590,9 +664,12 @@ impl Game {
                 category: m.category,
                 urgency: m.urgency,
                 sentiment: m.sentiment,
-                // Hurdles outside the active filter (hub.rs) dim like
-                // resolved ones.
-                faded: !open || !self.hub.filter_matches(&h.message),
+                // Resolved hurdles fade, as do ones outside the hub filter
+                // (story 013) or filtered out by the binoculars / an active
+                // hazard zone (stories 005/010/012).
+                faded: !open
+                    || !self.hub.filter_matches(&h.message)
+                    || !self.lens.passes(&h.message),
                 down: h.message.status == MessageStatus::Cleared,
                 marked: h.message.status == MessageStatus::Skipped,
                 burning: open && meta::is_overdue(m.urgency, waited),
