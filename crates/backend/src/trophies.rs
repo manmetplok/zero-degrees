@@ -229,7 +229,7 @@ async fn evaluate_and_award(pool: &SqlitePool, player_id: i64) -> Result<Vec<Tro
     Ok(awarded)
 }
 
-#[post("/players/<player_id>/clears", data = "<body>")]
+#[post("/players/<player_id>/trophies/clears", data = "<body>")]
 pub async fn record_clear(
     pool: &State<SqlitePool>,
     player_id: i64,
@@ -255,7 +255,7 @@ pub async fn record_clear(
     Ok(Json(awarded))
 }
 
-#[post("/players/<player_id>/day-end", data = "<body>")]
+#[post("/players/<player_id>/trophies/day-end", data = "<body>")]
 pub async fn record_day_end(
     pool: &State<SqlitePool>,
     player_id: i64,

@@ -29,7 +29,7 @@ fn fast_clear() -> RecordClear {
 
 async fn record_clear(client: &Client, player_id: i64, body: &RecordClear) -> Vec<Trophy> {
     let response = client
-        .post(format!("/players/{player_id}/clears"))
+        .post(format!("/players/{player_id}/trophies/clears"))
         .json(body)
         .dispatch()
         .await;
@@ -111,7 +111,7 @@ async fn tier_upgrades_from_bronze_to_silver_to_gold() {
 async fn clean_sweep_awarded_only_for_empty_track_day_ends() {
     let (client, player_id) = client_with_player().await;
     let response = client
-        .post(format!("/players/{player_id}/day-end"))
+        .post(format!("/players/{player_id}/trophies/day-end"))
         .json(&RecordDayEnd { track_empty: false })
         .dispatch()
         .await;
@@ -119,7 +119,7 @@ async fn clean_sweep_awarded_only_for_empty_track_day_ends() {
     assert!(awarded.is_empty());
 
     let response = client
-        .post(format!("/players/{player_id}/day-end"))
+        .post(format!("/players/{player_id}/trophies/day-end"))
         .json(&RecordDayEnd { track_empty: true })
         .dispatch()
         .await;
@@ -159,7 +159,7 @@ async fn unknown_player_returns_not_found() {
     assert_eq!(response.status(), Status::NotFound);
 
     let response = client
-        .post("/players/999/clears")
+        .post("/players/999/trophies/clears")
         .json(&fast_clear())
         .dispatch()
         .await;

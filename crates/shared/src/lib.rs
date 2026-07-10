@@ -271,3 +271,35 @@ pub struct RecordClear {
 pub struct RecordDayEnd {
     pub track_empty: bool,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UrgencyLevel {
+    Low,
+    Normal,
+    High,
+    Critical,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ClearHurdle {
+    pub urgency: UrgencyLevel,
+    pub on_time: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ClearResult {
+    pub xp_awarded: i64,
+    pub total_xp: i64,
+    pub combo_multiplier: f64,
+    pub combo_count: i32,
+    pub combo_window_remaining_ms: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PlayerProgress {
+    pub total_xp: i64,
+    pub combo_multiplier: f64,
+    pub combo_count: i32,
+    pub combo_window_remaining_ms: i64,
+}

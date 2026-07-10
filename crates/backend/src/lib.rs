@@ -3,11 +3,13 @@ extern crate rocket;
 
 mod classifier;
 pub mod db;
+mod combo;
 mod feedback;
 mod messages;
 mod routes;
 mod track_objects;
 mod trophies;
+mod xp;
 
 use rocket::{Build, Rocket};
 use sqlx::SqlitePool;
@@ -30,6 +32,8 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
             trophies::record_day_end,
             trophies::list_earned,
             trophies::list_progress,
+            xp::clear,
+            xp::progress,
         ],
     )
 }
