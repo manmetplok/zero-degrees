@@ -78,3 +78,44 @@ pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
 }
+
+/// AI-classified mood of a message, rendered as a hurdle's aura.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Sentiment {
+    Positive,
+    Neutral,
+    Negative,
+    Angry,
+}
+
+impl Sentiment {
+    pub const ALL: [Sentiment; 4] = [
+        Sentiment::Positive,
+        Sentiment::Neutral,
+        Sentiment::Negative,
+        Sentiment::Angry,
+    ];
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateMessage {
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MessageRecord {
+    pub id: i64,
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+    pub status: MessageStatus,
+    pub sentiment: Sentiment,
+    pub created_at: String,
+}
