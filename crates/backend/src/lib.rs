@@ -4,6 +4,7 @@ extern crate rocket;
 pub mod db;
 mod routes;
 mod track_objects;
+mod trophies;
 
 use rocket::{Build, Rocket};
 use sqlx::SqlitePool;
@@ -16,6 +17,10 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
             track_objects::create,
             track_objects::list,
             track_objects::delete,
+            trophies::record_clear,
+            trophies::record_day_end,
+            trophies::list_earned,
+            trophies::list_progress,
         ],
     )
 }
