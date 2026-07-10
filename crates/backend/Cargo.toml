@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+rand = "0.8"
 rocket = { version = "0.5", features = ["json"] }
 shared = { path = "../shared" }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
