@@ -51,6 +51,50 @@ pub enum MessageStatus {
     Skipped,
 }
 
+/// AI-assigned urgency, from calmest to most dramatic. Drives hurdle height
+/// and point reward: low is the base jog, critical is the maximum hop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Urgency {
+    Low,
+    Normal,
+    High,
+    Critical,
+}
+
+impl Urgency {
+    pub fn point_reward(self) -> u32 {
+        match self {
+            Urgency::Low => 10,
+            Urgency::Normal => 20,
+            Urgency::High => 50,
+            Urgency::Critical => 100,
+        }
+    }
+}
+
+/// Request payload to ingest a new message; the backend scores its urgency.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateMessage {
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+}
+
+/// A persisted message plus its AI triage: the urgency level, the point
+/// reward it scales to, and the rationale shown on the detail card so the
+/// game reading never hides the real triage data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriagedMessage {
+    #[serde(flatten)]
+    pub message: Message,
+    pub urgency: Urgency,
+    pub point_reward: u32,
+    pub rationale: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthResponse {
     pub status: String,
@@ -77,4 +121,20 @@ pub struct TrackObject {
 pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn point_reward_increases_with_urgency_severity() {
+        let rewards = [
+            Urgency::Low.point_reward(),
+            Urgency::Normal.point_reward(),
+            Urgency::High.point_reward(),
+            Urgency::Critical.point_reward(),
+        ];
+        assert!(rewards.windows(2).all(|pair| pair[0] < pair[1]));
+    }
 }
