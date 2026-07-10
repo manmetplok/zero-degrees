@@ -388,3 +388,68 @@ pub struct ReplyDraft {
 pub struct RechargeDraft {
     pub steering_note: String,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Urgency {
+    Low,
+    Normal,
+    High,
+    Critical,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Sentiment {
+    Positive,
+    Neutral,
+    Negative,
+    Angry,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Difficulty {
+    ChillJog,
+    NormalShift,
+    NightmareMonday,
+}
+
+impl Default for Difficulty {
+    fn default() -> Self {
+        Difficulty::NormalShift
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SeedMessage {
+    pub id: i64,
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+    pub status: MessageStatus,
+    pub urgency: Urgency,
+    pub sentiment: Sentiment,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SeedRequest {
+    #[serde(default)]
+    pub difficulty: Difficulty,
+    #[serde(default)]
+    pub reset: bool,
+    #[serde(default)]
+    pub seed: Option<u64>,
+    #[serde(default)]
+    pub count: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeedResponse {
+    pub created: usize,
+    pub cleared: usize,
+    pub difficulty: Difficulty,
+}
