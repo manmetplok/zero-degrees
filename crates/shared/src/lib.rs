@@ -203,3 +203,71 @@ pub struct CategorizedMessage {
 pub struct SetMessageCategory {
     pub category: Category,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrophyKind {
+    SpeedDemon,
+    Firefighter,
+    Peacekeeper,
+    CleanSweep,
+    HighJumper,
+}
+
+impl TrophyKind {
+    pub const ALL: [TrophyKind; 5] = [
+        TrophyKind::SpeedDemon,
+        TrophyKind::Firefighter,
+        TrophyKind::Peacekeeper,
+        TrophyKind::CleanSweep,
+        TrophyKind::HighJumper,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TrophyKind::SpeedDemon => "Speed Demon",
+            TrophyKind::Firefighter => "Firefighter",
+            TrophyKind::Peacekeeper => "Peacekeeper",
+            TrophyKind::CleanSweep => "Clean Sweep",
+            TrophyKind::HighJumper => "High Jumper",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrophyTier {
+    Bronze,
+    Silver,
+    Gold,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Trophy {
+    pub kind: TrophyKind,
+    pub tier: TrophyTier,
+    pub first_awarded_at: String,
+    pub tier_awarded_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrophyProgress {
+    pub kind: TrophyKind,
+    pub tier: Option<TrophyTier>,
+    pub count: i64,
+    pub next_tier: Option<TrophyTier>,
+    pub next_threshold: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecordClear {
+    pub duration_seconds: i64,
+    pub was_burning: bool,
+    pub is_angry_aura: bool,
+    pub is_critical: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecordDayEnd {
+    pub track_empty: bool,
+}
