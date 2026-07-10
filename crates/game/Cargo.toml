@@ -1,0 +1,24 @@
+[package]
+name = "game"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+shared = { path = "../shared" }
+macroquad = "0.4.15"
+
+# cargo-quad-apk reads this for the Android build (see ARCHITECTURE.md).
+[package.metadata.android]
+package_name = "com.zerodegrees.game"
+label = "Zero Degrees"
+assets = "assets/"
+version_code = 1
+version_name = "0.1.0"
+fullscreen = true
+opengles_version_major = 3
+opengles_version_minor = 0
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.activity_attributes]
+"android:screenOrientation" = "portrait"
+"android:exported" = "true"

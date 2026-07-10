@@ -1,10 +1,6 @@
-use backend::db;
+//! Rocket backend — placeholder until the backend feature set is scoped
+//! (see "Open items" in ARCHITECTURE.md). The game runs fully offline for now.
 
-#[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite:zero-degrees.db?mode=rwc".into());
-    let pool = db::connect(&database_url).await;
-    backend::rocket(pool).launch().await?;
-    Ok(())
+fn main() {
+    println!("zero-degrees backend: not implemented yet");
 }

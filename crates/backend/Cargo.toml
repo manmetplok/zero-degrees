@@ -1,9 +1,7 @@
 [package]
 name = "backend"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-rocket = { version = "0.5", features = ["json"] }
 shared = { path = "../shared" }
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
