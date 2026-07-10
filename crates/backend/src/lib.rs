@@ -10,14 +10,18 @@ mod demo;
 mod draft_writer;
 mod drafts;
 mod feedback;
+mod hurdles;
 mod leaderboard;
 pub mod messages;
+mod response_targets;
 mod routes;
+mod scoring;
 mod search;
 mod sentiment;
 mod seeding;
 pub mod summarizer;
 mod track_objects;
+mod urgency;
 mod trophies;
 mod xp;
 
@@ -64,6 +68,12 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 drafts::recharge,
                 demo::seed,
                 search::search,
+                hurdles::create,
+                hurdles::list,
+                hurdles::clear,
+                hurdles::response_time_stats,
+                response_targets::list,
+                response_targets::update,
                 messages::get_detail,
                 messages::save_draft,
                 messages::send,
