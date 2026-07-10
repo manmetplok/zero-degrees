@@ -2,6 +2,7 @@
 extern crate rocket;
 
 mod assignments;
+mod boss;
 mod classifier;
 mod combo;
 mod course_generator;
@@ -34,10 +35,12 @@ use std::sync::Arc;
 pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
     let writer: Arc<dyn DraftWriter> = Arc::new(TemplateDraftWriter);
     let generator: Box<dyn CourseGenerator> = course_generator::default_generator();
+    let boss_config = boss::BossConfig::from_env();
     rocket::build()
         .manage(pool)
         .manage(writer)
         .manage(generator)
+        .manage(boss_config)
         .mount(
             "/",
             routes![
@@ -74,6 +77,9 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 hurdles::response_time_stats,
                 response_targets::list,
                 response_targets::update,
+                boss::create_message,
+                boss::clear_message,
+                boss::boss_status,
                 messages::get_detail,
                 messages::save_draft,
                 messages::send,
