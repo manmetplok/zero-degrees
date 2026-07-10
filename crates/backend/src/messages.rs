@@ -363,3 +363,34 @@ pub async fn send(
         .ok_or(Status::InternalServerError)?;
     to_message_detail(row).map(Json)
 }
+
+pub async fn fetch_open_or_recent(
+    pool: &SqlitePool,
+    recent_since: i64,
+) -> Result<Vec<Message>, sqlx::Error> {
+    let query = format!(
+        "SELECT {SELECT_COLUMNS} FROM messages \
+         WHERE status = 'open' OR received_at >= ? ORDER BY id"
+    );
+    let rows = sqlx::query_as::<_, MessageRow>(&query)
+        .bind(recent_since)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.into_iter().filter_map(|r| to_message(r).ok()).collect())
+}
+
+pub async fn fetch_by_ids(pool: &SqlitePool, ids: &[u64]) -> Result<Vec<Message>, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut builder = sqlx::QueryBuilder::new(format!(
+        "SELECT {SELECT_COLUMNS} FROM messages WHERE id IN ("
+    ));
+    let mut separated = builder.separated(", ");
+    for id in ids {
+        separated.push_bind(*id as i64);
+    }
+    builder.push(") ORDER BY id");
+    let rows = builder.build_query_as::<MessageRow>().fetch_all(pool).await?;
+    Ok(rows.into_iter().filter_map(|r| to_message(r).ok()).collect())
+}

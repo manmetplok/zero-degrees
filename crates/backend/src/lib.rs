@@ -11,6 +11,7 @@ mod demo;
 mod draft_writer;
 mod drafts;
 mod feedback;
+mod hazard_zones;
 mod hurdles;
 mod leaderboard;
 pub mod messages;
@@ -22,6 +23,7 @@ mod search;
 mod sentiment;
 mod seeding;
 pub mod summarizer;
+mod theme;
 mod track_objects;
 mod urgency;
 mod trophies;
@@ -82,6 +84,9 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 boss::clear_message,
                 boss::boss_status,
                 race_control::stats,
+                hazard_zones::analyze,
+                hazard_zones::list,
+                hazard_zones::get_one,
                 messages::get_detail,
                 messages::save_draft,
                 messages::send,
