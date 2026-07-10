@@ -78,3 +78,37 @@ pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
 }
+
+/// Who a message is currently assigned to, and since when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MessageAssignment {
+    pub runner_device_id: String,
+    pub assigned_at: String,
+}
+
+/// A message plus its current assignment state, as returned by the backend.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AssignedMessage {
+    pub id: u64,
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+    pub status: MessageStatus,
+    pub draft: Option<String>,
+    pub assignment: Option<MessageAssignment>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssignRequest {
+    pub runner_device_id: String,
+}
+
+/// A persisted "you've been handed a message" record a runner can poll for.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AssignmentNotification {
+    pub id: i64,
+    pub message_id: u64,
+    pub created_at: String,
+}
