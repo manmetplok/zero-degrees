@@ -2,6 +2,7 @@ mod assets;
 mod game;
 mod inbox;
 mod input;
+mod score;
 mod track;
 mod view;
 

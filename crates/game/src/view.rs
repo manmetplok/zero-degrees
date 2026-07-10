@@ -12,6 +12,7 @@ pub const PANEL: Color = Color::new(0.115, 0.115, 0.26, 1.0);
 pub const INK: Color = Color::new(0.93, 0.93, 0.98, 1.0);
 pub const INK_DIM: Color = Color::new(0.62, 0.62, 0.75, 1.0);
 pub const ACCENT: Color = Color::new(0.96, 0.15, 0.52, 1.0);
+pub const GOLD: Color = Color::new(1.0, 0.82, 0.29, 1.0);
 
 pub fn channel_color(channel: Channel) -> Color {
     match channel {

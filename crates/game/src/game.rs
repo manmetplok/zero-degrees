@@ -10,12 +10,14 @@ use shared::MessageStatus;
 use crate::assets::{Assets, GROUND_FRAC};
 use crate::inbox;
 use crate::input::{Gesture, GestureDetector};
+use crate::score::{self, Score};
 use crate::track::Track;
 use crate::view;
 
 const JUMP_TIME: f32 = 0.55;
 const JUMP_SPAN: f32 = 2.4; // track units covered by one jump
 const APPROACH_GAP: f32 = 1.2; // where the runner stops before a hurdle
+const POPUP_LIFE: f64 = 1.1; // seconds a score pop-up stays on screen
 
 enum Phase {
     Waiting,
@@ -41,6 +43,26 @@ pub struct Game {
     /// Drop-in animation start time per hurdle (message id -> get_time()).
     spawned_at: HashMap<u64, f64>,
     cleared: u32,
+    score: Score,
+    popups: Vec<Popup>,
+}
+
+/// Floating "+XP" text rising from a cleared hurdle.
+struct Popup {
+    text: String,
+    /// Track position the pop-up rises from.
+    world_x: f32,
+    /// get_time() when spawned.
+    at: f64,
+}
+
+/// "2" for whole multipliers, "1.5" otherwise.
+fn mult_label(m: f32) -> String {
+    if m.fract() == 0.0 {
+        format!("{}", m as u32)
+    } else {
+        format!("{m:.1}")
+    }
 }
 
 struct Layout {
@@ -83,6 +105,8 @@ impl Game {
             facing_left: false,
             spawned_at: HashMap::new(),
             cleared: 0,
+            score: Score::new(),
+            popups: Vec::new(),
         }
     }
 
@@ -141,14 +165,13 @@ impl Game {
         match &mut self.phase {
             Phase::Jumping { t, from } => {
                 *t += dt / JUMP_TIME;
-                let from = *from;
-                if *t >= 1.0 {
+                let (t, from) = (*t, *from);
+                if t >= 1.0 {
                     self.track.runner_at = from + JUMP_SPAN;
-                    self.track.resolve_next(MessageStatus::Cleared);
-                    self.cleared += 1;
+                    self.award_clear();
                     self.phase = Phase::Running;
                 } else {
-                    self.track.runner_at = from + JUMP_SPAN * *t;
+                    self.track.runner_at = from + JUMP_SPAN * t;
                 }
             }
             _ => {
@@ -177,6 +200,8 @@ impl Game {
             }
         }
         self.follow_camera(dt);
+        let now = get_time();
+        self.popups.retain(|p| now - p.at < POPUP_LIFE);
     }
 
     fn follow_camera(&mut self, dt: f32) {
@@ -208,6 +233,27 @@ impl Game {
             self.track.runner_target = h.at - APPROACH_GAP;
             self.phase = Phase::ApproachJump;
         }
+    }
+
+    /// Resolve the faced hurdle as cleared and award XP under the combo rules.
+    fn award_clear(&mut self) {
+        let hurdle_at = self.track.next_hurdle().map(|h| h.at);
+        if self.track.resolve_next(MessageStatus::Cleared).is_none() {
+            return;
+        }
+        self.cleared += 1;
+        let now = get_time();
+        let reward = self.score.on_clear(score::BASE_XP, now);
+        let text = if reward.multiplier > 1.0 {
+            format!("+{} XP  x{}", reward.xp, mult_label(reward.multiplier))
+        } else {
+            format!("+{} XP", reward.xp)
+        };
+        self.popups.push(Popup {
+            text,
+            world_x: hurdle_at.unwrap_or(self.track.runner_at),
+            at: now,
+        });
     }
 
     fn skip_hurdle(&mut self) {
@@ -243,8 +289,51 @@ impl Game {
         self.draw_track(lay);
         self.draw_hurdles(lay);
         self.draw_runner(lay);
+        self.draw_popups(lay);
         self.draw_hud(lay);
+        self.draw_combo(lay);
         self.draw_card(lay);
+    }
+
+    fn draw_popups(&self, lay: &Layout) {
+        let now = get_time();
+        for p in &self.popups {
+            let t = ((now - p.at) / POPUP_LIFE) as f32;
+            let fs = lay.h * 0.034;
+            let x = lay.x_of(p.world_x, self.cam_x);
+            let y = lay.ground_y - lay.unit * 3.6 - t * lay.unit * 1.4;
+            let dims = measure_text(&p.text, None, fs as u16, 1.0);
+            let mut color = view::GOLD;
+            color.a = 1.0 - t * t;
+            draw_text(&p.text, x - dims.width / 2.0, y, fs, color);
+        }
+    }
+
+    /// Combo meter: next multiplier plus a bar draining with the window.
+    fn draw_combo(&self, lay: &Layout) {
+        let Some(combo) = self.score.combo(get_time()) else {
+            return;
+        };
+        let fs = lay.h * 0.028;
+        let label = format!("combo x{}", mult_label(combo.next_multiplier));
+        let dims = measure_text(&label, None, fs as u16, 1.0);
+        let w = (lay.w * 0.28).max(dims.width + fs * 1.4);
+        // Right-aligned under the ingest button, clear of the left HUD column.
+        let btn = self.ingest_button_rect(lay);
+        let x = lay.w - w - lay.w * 0.04;
+        let y = btn.y + btn.h + lay.h * 0.015;
+        view::rounded_rect(x, y, w, fs * 1.8, fs * 0.9, view::PANEL);
+        draw_text(
+            &label,
+            x + (w - dims.width) / 2.0,
+            y + fs * 1.25,
+            fs,
+            view::GOLD,
+        );
+        let bar_h = fs * 0.32;
+        let bar_y = y + fs * 2.1;
+        view::rounded_rect(x, bar_y, w, bar_h, bar_h / 2.0, view::TRACK_EDGE);
+        view::rounded_rect(x, bar_y, w * combo.remaining, bar_h, bar_h / 2.0, view::GOLD);
     }
 
     fn draw_track(&self, lay: &Layout) {
@@ -345,8 +434,8 @@ impl Game {
         );
         draw_text(&label, pad + fs * 0.8, lay.h * 0.03 + fs * 1.25, fs, view::INK);
 
-        // Cleared counter under the pill.
-        let sub = format!("cleared {}", self.cleared);
+        // Cleared counter and XP total under the pill.
+        let sub = format!("cleared {}  ·  {} XP", self.cleared, self.score.xp);
         draw_text(&sub, pad + fs * 0.2, lay.h * 0.03 + fs * 2.9, fs * 0.8, view::INK_DIM);
 
         // Simulate-incoming button (demo control, doubles as the ingest hook).
