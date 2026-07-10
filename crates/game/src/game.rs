@@ -10,7 +10,8 @@ use shared::MessageStatus;
 use crate::assets::{Assets, GROUND_FRAC};
 use crate::inbox;
 use crate::input::{Gesture, GestureDetector};
-use crate::score::{self, Score};
+use crate::meta;
+use crate::score::Score;
 use crate::track::Track;
 use crate::view;
 
@@ -45,6 +46,10 @@ pub struct Game {
     cleared: u32,
     score: Score,
     popups: Vec<Popup>,
+    /// Manual category overrides (story 003), persisted locally.
+    overrides: meta::Overrides,
+    /// Response times of cleared hurdles (story 014); read by race control.
+    pub responses: meta::ResponseLog,
 }
 
 /// Floating "+XP" text rising from a cleared hurdle.
@@ -97,7 +102,7 @@ impl Game {
     pub fn new(assets: Assets) -> Self {
         Self {
             assets,
-            track: Track::new(inbox::sample_messages(8)),
+            track: Track::new(inbox::sample_messages(8), meta::demo_now(0.0)),
             phase: Phase::Waiting,
             gestures: GestureDetector::new(),
             cam_x: 0.0,
@@ -107,6 +112,8 @@ impl Game {
             cleared: 0,
             score: Score::new(),
             popups: Vec::new(),
+            overrides: meta::Overrides::load_default(),
+            responses: meta::ResponseLog::default(),
         }
     }
 
@@ -134,6 +141,8 @@ impl Game {
             Gesture::Tap(pos) => {
                 if self.ingest_button_rect(lay).contains(pos) {
                     self.simulate_incoming();
+                } else if self.retype_chip_rect(lay).is_some_and(|r| r.contains(pos)) {
+                    self.retype_faced();
                 } else {
                     self.approach();
                 }
@@ -160,6 +169,15 @@ impl Game {
         if is_key_pressed(KeyCode::S) || is_key_pressed(KeyCode::Left) {
             self.skip_hurdle();
         }
+        if is_key_pressed(KeyCode::T) {
+            self.retype_faced();
+        }
+        if is_key_pressed(KeyCode::F) {
+            self.track.free_run = !self.track.free_run;
+        }
+
+        // Priority layout: relayout as ages change, ease hurdles to slots.
+        self.track.tick(dt, meta::demo_now(get_time()));
 
         // Runner physics.
         match &mut self.phase {
@@ -235,23 +253,40 @@ impl Game {
         }
     }
 
-    /// Resolve the faced hurdle as cleared and award XP under the combo rules.
+    /// Resolve the faced hurdle as cleared and award XP: base scales with
+    /// urgency (story 004), a speed bonus or late partial applies against the
+    /// response target (story 014), then the combo rules (story 015).
     fn award_clear(&mut self) {
-        let hurdle_at = self.track.next_hurdle().map(|h| h.at);
-        if self.track.resolve_next(MessageStatus::Cleared).is_none() {
+        let now = get_time();
+        let now_ts = meta::demo_now(now);
+        let Some(h) = self.track.next_hurdle() else {
+            return;
+        };
+        let (hurdle_at, id, received_at) = (h.at, h.message.id, h.message.received_at);
+        let m = meta::enriched(&h.message, &self.overrides);
+        if self.track.resolve_next(MessageStatus::Cleared, now_ts).is_none() {
             return;
         }
         self.cleared += 1;
-        let now = get_time();
-        let reward = self.score.on_clear(score::BASE_XP, now);
-        let text = if reward.multiplier > 1.0 {
+        let waited = now_ts - received_at;
+        let on_time = !meta::is_overdue(m.urgency, waited);
+        self.responses.record(meta::ResponseRecord {
+            message_id: id,
+            category: m.category,
+            urgency: m.urgency,
+            waited_secs: waited,
+            on_time,
+        });
+        let reward = self.score.on_clear(meta::clear_xp(m.urgency, waited), now);
+        let mut text = if reward.multiplier > 1.0 {
             format!("+{} XP  x{}", reward.xp, mult_label(reward.multiplier))
         } else {
             format!("+{} XP", reward.xp)
         };
+        text.push_str(if on_time { "  fast!" } else { "  fire out" });
         self.popups.push(Popup {
             text,
-            world_x: hurdle_at.unwrap_or(self.track.runner_at),
+            world_x: hurdle_at,
             at: now,
         });
     }
@@ -261,8 +296,20 @@ impl Game {
             return;
         }
         self.scroll_hold = 0.0;
-        self.track.resolve_next(MessageStatus::Skipped);
+        self.track
+            .resolve_next(MessageStatus::Skipped, meta::demo_now(get_time()));
         self.phase = Phase::Running;
+    }
+
+    /// Cycle the faced hurdle's category (story 003): the manual choice
+    /// overrides the AI, re-skins the hurdle instantly, and persists locally.
+    fn retype_faced(&mut self) {
+        let Some(h) = self.track.next_hurdle() else {
+            return;
+        };
+        let id = h.message.id;
+        let current = meta::enriched(&h.message, &self.overrides).category;
+        self.overrides.set(id, current.next());
     }
 
     /// Scenario: new message ingested mid-run drops onto the track ahead.
@@ -270,7 +317,7 @@ impl Game {
         let existing: Vec<_> = self.track.hurdles.iter().map(|h| h.message.clone()).collect();
         let msg = inbox::next_incoming(&existing);
         let id = msg.id;
-        self.track.add_message(msg);
+        self.track.add_message(msg, meta::demo_now(get_time()));
         self.spawned_at.insert(id, get_time());
         if matches!(self.phase, Phase::Celebrating) {
             self.phase = Phase::Waiting;
@@ -366,6 +413,7 @@ impl Game {
 
     fn draw_hurdles(&self, lay: &Layout) {
         let now = get_time();
+        let now_ts = meta::demo_now(now);
         for h in &self.track.hurdles {
             let mut x = lay.x_of(h.at, self.cam_x);
             if x < -lay.unit * 2.0 || x > lay.w + lay.unit * 2.0 {
@@ -377,13 +425,28 @@ impl Game {
                 drop = -(1.0 - p) * (1.0 - p) * lay.h * 0.5;
                 x += (1.0 - p) * lay.unit * 0.3;
             }
+            let m = meta::enriched(&h.message, &self.overrides);
+            let open = h.message.status == MessageStatus::Open;
+            let waited = now_ts - h.message.received_at;
+            let target = m.urgency.response_target();
             let style = view::HurdleStyle {
-                color: view::channel_color(h.message.channel),
-                faded: h.message.status != MessageStatus::Open,
+                category: m.category,
+                urgency: m.urgency,
+                sentiment: m.sentiment,
+                faded: !open,
                 down: h.message.status == MessageStatus::Cleared,
                 marked: h.message.status == MessageStatus::Skipped,
+                burning: open && meta::is_overdue(m.urgency, waited),
+                wait: open.then(|| view::WaitLabel {
+                    text: if waited > target {
+                        format!("late {}", meta::format_wait(waited - target))
+                    } else {
+                        meta::format_wait(waited)
+                    },
+                    frac: waited as f32 / target as f32,
+                }),
             };
-            view::hurdle(x, lay.ground_y + drop, lay.unit, h.message.channel, &style);
+            view::hurdle(x, lay.ground_y + drop, lay.unit, &style, now as f32);
         }
     }
 
@@ -398,7 +461,8 @@ impl Game {
         let x = lay.x_of(self.track.runner_at, self.cam_x) - quad / 2.0;
         let mut y = lay.ground_y - quad * (1.0 - GROUND_FRAC);
         if let Phase::Jumping { t, .. } = self.phase {
-            y -= (std::f32::consts::PI * t).sin() * lay.unit * 1.6;
+            // Peak sits just above the tallest (critical) hurdle bar.
+            y -= (std::f32::consts::PI * t).sin() * lay.unit * 1.9;
         }
         draw_texture_ex(
             &strip.texture,
@@ -437,6 +501,9 @@ impl Game {
         // Cleared counter and XP total under the pill.
         let sub = format!("cleared {}  ·  {} XP", self.cleared, self.score.xp);
         draw_text(&sub, pad + fs * 0.2, lay.h * 0.03 + fs * 2.9, fs * 0.8, view::INK_DIM);
+        if self.track.free_run {
+            draw_text("free run", pad + fs * 0.2, lay.h * 0.03 + fs * 4.1, fs * 0.8, view::GOLD);
+        }
 
         // Simulate-incoming button (demo control, doubles as the ingest hook).
         let btn = self.ingest_button_rect(lay);
@@ -458,19 +525,34 @@ impl Game {
         );
     }
 
-    fn draw_card(&self, lay: &Layout) {
+    /// Card geometry shared by draw_card and the retype hit test.
+    fn card_metrics(lay: &Layout) -> (f32, f32, f32, f32) {
         let pad = lay.w * 0.04;
-        let card_y = lay.h * 0.78;
+        let card_y = lay.h * 0.74;
+        let fs = lay.h * 0.026;
+        (pad, card_y, fs, pad * 2.2)
+    }
+
+    /// Where the tappable category chip sits, when a hurdle is faced.
+    fn retype_chip_rect(&self, lay: &Layout) -> Option<Rect> {
+        let h = self.track.next_hurdle()?;
+        let m = meta::enriched(&h.message, &self.overrides);
+        let (_, card_y, fs, x) = Self::card_metrics(lay);
+        Some(view::chip_rect(x, card_y + fs * 6.9, fs, m.category.label()))
+    }
+
+    fn draw_card(&self, lay: &Layout) {
+        let (pad, card_y, fs, x) = Self::card_metrics(lay);
         let card_h = lay.h - card_y - pad;
         view::rounded_rect(pad, card_y, lay.w - 2.0 * pad, card_h, lay.w * 0.03, view::PANEL);
 
-        let fs = lay.h * 0.026;
-        let x = pad * 2.2;
         match self.track.next_hurdle() {
             Some(h) => {
-                let color = view::channel_color(h.message.channel);
+                let m = meta::enriched(&h.message, &self.overrides);
+                let color = view::category_color(m.category);
                 draw_rectangle(pad, card_y, lay.w * 0.012, card_h, color);
-                view::channel_icon(x + fs * 0.6, card_y + fs * 1.9, fs * 1.3, h.message.channel, color);
+                let channel = view::channel_color(h.message.channel);
+                view::channel_icon(x + fs * 0.6, card_y + fs * 1.9, fs * 1.3, h.message.channel, channel);
                 draw_text(
                     format!("{}  ·  {}", h.message.channel.label(), h.message.sender),
                     x + fs * 1.8,
@@ -478,9 +560,41 @@ impl Game {
                     fs * 0.9,
                     view::INK_DIM,
                 );
-                draw_text(&h.message.subject, x, card_y + fs * 4.3, fs * 1.15, view::INK);
+                draw_text(&h.message.subject, x, card_y + fs * 4.1, fs * 1.15, view::INK);
+                // Waiting time vs the urgency's response target (story 014).
+                let now_ts = meta::demo_now(get_time());
+                let waited = now_ts - h.message.received_at;
+                let target = m.urgency.response_target();
+                let (status, status_color) = if waited > target {
+                    (
+                        format!("ON FIRE · late {}", meta::format_wait(waited - target)),
+                        view::FLAME,
+                    )
+                } else {
+                    (
+                        format!(
+                            "waiting {} · target {}",
+                            meta::format_wait(waited),
+                            meta::format_wait(target)
+                        ),
+                        view::INK_DIM,
+                    )
+                };
+                draw_text(&status, x, card_y + fs * 5.4, fs * 0.85, status_color);
+                // Triage row: tappable category chip plus the honest read —
+                // urgency with its why-it-matters signal, and sentiment.
+                let chip_label = m.category.label();
+                let chip = view::chip(x, card_y + fs * 6.9, fs, chip_label, color);
+                let mut triage = format!("{} urgency · {}", m.urgency.label(), m.sentiment.label());
+                if let Some(signal) = m.signal {
+                    triage.push_str(&format!(" · \"{}\"", signal.trim()));
+                }
+                if m.overridden {
+                    triage.push_str(" · retyped");
+                }
+                draw_text(&triage, chip.x + chip.w + fs * 0.6, card_y + fs * 6.9, fs * 0.85, view::INK_DIM);
                 draw_text(
-                    "tap: approach    swipe up: clear    swipe left: skip",
+                    "tap: run · up: clear · left: skip · chip: retype",
                     x,
                     card_y + card_h - fs * 0.9,
                     fs * 0.8,
