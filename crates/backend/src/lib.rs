@@ -5,6 +5,8 @@ mod assignments;
 mod classifier;
 mod combo;
 pub mod db;
+mod draft_writer;
+mod drafts;
 mod feedback;
 mod leaderboard;
 pub mod messages;
@@ -14,11 +16,14 @@ mod track_objects;
 mod trophies;
 mod xp;
 
+use draft_writer::{DraftWriter, TemplateDraftWriter};
 use rocket::{Build, Rocket};
 use sqlx::SqlitePool;
+use std::sync::Arc;
 
 pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
-    rocket::build().manage(pool).mount(
+    let writer: Arc<dyn DraftWriter> = Arc::new(TemplateDraftWriter);
+    rocket::build().manage(pool).manage(writer).mount(
         "/",
         routes![
             routes::health,
@@ -43,6 +48,9 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
             assignments::lane,
             assignments::notifications,
             leaderboard::get,
+            drafts::create,
+            drafts::latest,
+            drafts::recharge,
         ],
     )
 }
