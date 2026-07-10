@@ -63,6 +63,9 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 drafts::recharge,
                 demo::seed,
                 search::search,
+                messages::get_detail,
+                messages::save_draft,
+                messages::send,
             ],
         )
 }

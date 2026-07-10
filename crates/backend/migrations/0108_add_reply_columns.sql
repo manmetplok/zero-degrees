@@ -1,0 +1,3 @@
+ALTER TABLE messages ADD COLUMN reply TEXT;
+ALTER TABLE messages ADD COLUMN points_awarded INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE messages ADD COLUMN resolved_at TEXT;
