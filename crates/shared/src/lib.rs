@@ -41,6 +41,19 @@ pub struct Message {
     /// Unix timestamp (seconds) when the message was received.
     pub received_at: i64,
     pub status: MessageStatus,
+    /// One-to-two-sentence AI scout report. `None` means `body` was already
+    /// under the summary threshold, so the client shows it directly.
+    #[serde(default)]
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateMessage {
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
