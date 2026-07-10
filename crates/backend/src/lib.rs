@@ -16,6 +16,7 @@ mod hurdles;
 mod leaderboard;
 pub mod messages;
 mod response_targets;
+mod priority;
 mod race_control;
 mod routes;
 mod scoring;
@@ -55,6 +56,7 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 messages::create,
                 messages::list,
                 messages::list_open,
+                messages::list_open_prioritized,
                 messages::set_category,
                 feedback::create,
                 feedback::aggregate,

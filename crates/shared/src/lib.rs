@@ -720,3 +720,12 @@ impl Urgency {
         }
     }
 }
+
+/// An open message with its computed track priority. Highest priority = nearest the runner.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenMessage {
+    pub message: Message,
+    pub urgency: Urgency,
+    pub sentiment: Sentiment,
+    pub priority: f64,
+}

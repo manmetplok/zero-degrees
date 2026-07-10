@@ -4,7 +4,7 @@ use rocket::serde::json::Json;
 use rocket::State;
 use shared::{
     CategorizedMessage, Category, Channel, CreateMessage, Message, MessageDetail, MessageStatus,
-    OpenMessages, SaveDraftRequest, SendReplyRequest, Sentiment, SetMessageCategory,
+    OpenMessage, OpenMessages, SaveDraftRequest, SendReplyRequest, Sentiment, SetMessageCategory,
 };
 use sqlx::SqlitePool;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -405,4 +405,42 @@ pub async fn fetch_by_ids(pool: &SqlitePool, ids: &[u64]) -> Result<Vec<Message>
     builder.push(") ORDER BY id");
     let rows = builder.build_query_as::<MessageRow>().fetch_all(pool).await?;
     Ok(rows.into_iter().filter_map(|r| to_message(r).ok()).collect())
+}
+
+fn to_open_message(row: MessageRow) -> Result<OpenMessage, Status> {
+    let urgency = crate::urgency::from_str(&row.urgency).ok_or(Status::InternalServerError)?;
+    let sentiment = sentiment_from_str(&row.sentiment).ok_or(Status::InternalServerError)?;
+    let message = to_message(row)?;
+    let age_seconds = (now_unix() - message.received_at).max(0);
+    let priority = crate::priority::score(urgency, sentiment, age_seconds);
+    Ok(OpenMessage {
+        message,
+        urgency,
+        sentiment,
+        priority,
+    })
+}
+
+#[get("/messages/open")]
+pub async fn list_open_prioritized(
+    pool: &State<SqlitePool>,
+) -> Result<Json<Vec<OpenMessage>>, Status> {
+    let query = format!(
+        "SELECT {SELECT_COLUMNS} FROM messages WHERE status = 'open' ORDER BY id"
+    );
+    let rows = sqlx::query_as::<_, MessageRow>(&query)
+        .fetch_all(pool.inner())
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+    let mut open_messages = rows
+        .into_iter()
+        .map(to_open_message)
+        .collect::<Result<Vec<_>, _>>()?;
+    open_messages.sort_by(|a, b| {
+        b.priority
+            .partial_cmp(&a.priority)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.message.received_at.cmp(&b.message.received_at))
+    });
+    Ok(Json(open_messages))
 }
