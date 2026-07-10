@@ -1,8 +1,11 @@
 mod assets;
+mod card;
+mod feedback;
 mod game;
 mod inbox;
 mod input;
 mod meta;
+mod reply;
 mod score;
 mod track;
 mod view;
@@ -46,7 +49,7 @@ async fn main() {
         frames += 1;
         if let Some(path) = &shot {
             if demo {
-                if let Some(n) = [90u32, 210, 330].iter().position(|f| *f == frames) {
+                if let Some(n) = [160u32, 320, 500].iter().position(|f| *f == frames) {
                     get_screen_data()
                         .export_png(&path.replace(".png", &format!("_{}.png", n + 1)));
                     if n == 2 {

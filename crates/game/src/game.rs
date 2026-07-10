@@ -8,6 +8,7 @@ use macroquad::prelude::*;
 use shared::MessageStatus;
 
 use crate::assets::{Assets, GROUND_FRAC};
+use crate::card::{CardAction, CardHost};
 use crate::inbox;
 use crate::input::{Gesture, GestureDetector};
 use crate::meta;
@@ -50,6 +51,10 @@ pub struct Game {
     overrides: meta::Overrides,
     /// Response times of cleared hurdles (story 014); read by race control.
     pub responses: meta::ResponseLog,
+    /// Hurdle detail overlay + AI coach feedback (stories 006-008, 020).
+    cards: CardHost,
+    /// A tapped hurdle opens its card once the runner arrives (story 006).
+    card_pending: bool,
 }
 
 /// Floating "+XP" text rising from a cleared hurdle.
@@ -114,17 +119,31 @@ impl Game {
             popups: Vec::new(),
             overrides: meta::Overrides::load_default(),
             responses: meta::ResponseLog::default(),
+            cards: CardHost::new(),
+            card_pending: false,
         }
     }
 
-    /// Scripted actions for the ZD_DEMO dev harness (see main.rs): exercises
-    /// clear, skip, and mid-run ingestion without real input.
+    /// AI-coach feedback ratios for race control (story 020).
+    #[allow(dead_code)] // read by the race-control screen (story 011)
+    pub fn feedback(&self) -> &crate::feedback::FeedbackStore {
+        self.cards.feedback()
+    }
+
+    /// Scripted actions for the ZD_DEMO dev harness (see main.rs): walks the
+    /// full card flow — open card, power-up draft, recharge with a steering
+    /// note, swipe-up send — without real input. Frame numbers leave slack
+    /// for the wall-clock walk-up and charge animations at 60 or 120 fps, so
+    /// the shots land on the scout card, the revealed draft, and the jump.
     pub fn demo_tick(&mut self, frame: u32) {
         match frame {
-            30 => self.clear_hurdle(),
-            170 => self.skip_hurdle(),
-            180 => self.simulate_incoming(),
-            260 => self.clear_hurdle(),
+            20 => self.clear_hurdle(), // now opens the review card on arrival
+            165 => self.cards.demo_power_up(get_time()),
+            330 => self.cards.demo_recharge("keep it short", get_time()),
+            480 => {
+                let action = self.cards.demo_send(get_time());
+                self.apply_card_action(action);
+            }
             _ => {}
         }
     }
@@ -137,6 +156,16 @@ impl Game {
     }
 
     fn update(&mut self, dt: f32, lay: &Layout) {
+        // While the detail card is open it captures all input and the run
+        // idles underneath (stories 006-008). An approved send fires the
+        // jump via apply_card_action; backing out changes nothing.
+        if self.cards.is_open() {
+            let action = self.cards.handle(self.gestures.poll(), lay.w, lay.h, get_time());
+            self.cards.poll_keys(get_time());
+            self.apply_card_action(action);
+            self.follow_camera(dt);
+            return;
+        }
         match self.gestures.poll() {
             Gesture::Tap(pos) => {
                 if self.ingest_button_rect(lay).contains(pos) {
@@ -144,7 +173,10 @@ impl Game {
                 } else if self.retype_chip_rect(lay).is_some_and(|r| r.contains(pos)) {
                     self.retype_faced();
                 } else {
+                    // Story 006: tapping walks up to the faced hurdle and
+                    // opens its detail card on arrival (try_open_card).
                     self.approach();
+                    self.card_pending = true;
                 }
             }
             Gesture::SwipeUp => self.clear_hurdle(),
@@ -178,6 +210,11 @@ impl Game {
 
         // Priority layout: relayout as ages change, ease hurdles to slots.
         self.track.tick(dt, meta::demo_now(get_time()));
+
+        // A queued detail card opens once the runner stands at the hurdle.
+        if self.card_pending {
+            self.try_open_card();
+        }
 
         // Runner physics.
         match &mut self.phase {
@@ -242,14 +279,54 @@ impl Game {
         }
     }
 
+    /// Story 008: clearing a hurdle means reviewing and sending a real
+    /// reply, so a bare swipe-up no longer resolves anything — it opens the
+    /// hurdle's card for review. The jump + score fire from
+    /// `apply_card_action` once the card reports an approved send.
     fn clear_hurdle(&mut self) {
         if !matches!(self.phase, Phase::Waiting | Phase::Running) {
             return;
         }
         self.scroll_hold = 0.0;
-        if let Some(h) = self.track.next_hurdle() {
-            self.track.runner_target = h.at - APPROACH_GAP;
-            self.phase = Phase::ApproachJump;
+        if self.track.next_hurdle().is_some() {
+            self.approach();
+            self.card_pending = true;
+        }
+    }
+
+    /// Open the queued detail card once the runner stands before the faced
+    /// hurdle, walking it over first when it stopped elsewhere (story 006).
+    fn try_open_card(&mut self) {
+        if !matches!(self.phase, Phase::Waiting | Phase::Running) {
+            self.card_pending = false;
+            return;
+        }
+        let Some(h) = self.track.next_hurdle() else {
+            self.card_pending = false;
+            return;
+        };
+        let stop_at = h.at - APPROACH_GAP;
+        if (self.track.runner_at - stop_at).abs() < 0.05 {
+            let message = h.message.clone();
+            self.cards.open_for(&message, get_time());
+            self.card_pending = false;
+        } else if (self.track.runner_target - stop_at).abs() > 0.01 {
+            // Not headed to the hurdle yet (e.g. stopped at an auto-run
+            // point): walk over; the card opens on arrival.
+            self.track.runner_target = stop_at;
+            self.phase = Phase::Running;
+        }
+    }
+
+    /// React to a card decision (story 008): an approved send resolves the
+    /// hurdle through the normal jump, so animation and score happen only
+    /// now — never when the draft was generated.
+    fn apply_card_action(&mut self, action: CardAction) {
+        if action == CardAction::Send {
+            if let Some(h) = self.track.next_hurdle() {
+                self.track.runner_target = h.at - APPROACH_GAP;
+                self.phase = Phase::ApproachJump;
+            }
         }
     }
 
@@ -340,6 +417,8 @@ impl Game {
         self.draw_hud(lay);
         self.draw_combo(lay);
         self.draw_card(lay);
+        // Detail overlay on top of everything (stories 006-008).
+        self.cards.draw();
     }
 
     fn draw_popups(&self, lay: &Layout) {

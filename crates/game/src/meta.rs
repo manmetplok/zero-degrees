@@ -235,6 +235,42 @@ pub fn enriched(message: &Message, overrides: &Overrides) -> MessageMeta {
     meta
 }
 
+// ---- scout report (story 006) ----
+
+/// Bodies at or under this length are shown verbatim on the card and no
+/// summary model call is made (story 006).
+pub const SUMMARY_THRESHOLD: usize = 120;
+
+/// Deterministic mock of the AI scout-report call: short bodies come back
+/// verbatim, longer ones lead with the subject and the first sentence.
+pub fn summarize(message: &Message) -> String {
+    if message.body.len() <= SUMMARY_THRESHOLD {
+        return message.body.clone();
+    }
+    let first_sentence = message
+        .body
+        .split_terminator(['.', '!', '?'])
+        .next()
+        .unwrap_or(&message.body)
+        .trim();
+    format!("{}: {}.", message.subject, first_sentence)
+}
+
+/// One-line "why it matters" for the urgency call, shown on the detail card
+/// so the game reading never hides the real triage data (story 004).
+pub fn why_it_matters(meta: &MessageMeta) -> String {
+    match (meta.urgency, meta.signal) {
+        (Urgency::Critical, Some(kw)) => {
+            format!("Time-critical: the message says \"{}\".", kw.trim())
+        }
+        (Urgency::High, Some(kw)) => {
+            format!("Something is failing for the customer (\"{}\").", kw.trim())
+        }
+        (Urgency::Low, Some(kw)) => format!("Routine: \"{}\" signals no time pressure.", kw.trim()),
+        _ => "No urgency signals found; the default response target applies.".to_string(),
+    }
+}
+
 // ---- priority (story 009) ----
 
 // Urgency bands are far enough apart that mood + age (capped below) can lift
