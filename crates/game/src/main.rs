@@ -2,6 +2,8 @@ mod assets;
 mod game;
 mod inbox;
 mod input;
+#[allow(dead_code)] // consumed incrementally as the stories land
+mod meta;
 mod score;
 mod track;
 mod view;
