@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Runner preview</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: system-ui, sans-serif; }
+    #bar { position: fixed; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; z-index: 1; }
+    #bar button { padding: 6px 12px; border: 0; border-radius: 6px; background: #4361ee; color: #fff; cursor: pointer; }
+    #bar button.active { background: #f72585; }
+  </style>
+</head>
+<body>
+  <div id="bar"></div>
+  <script type="importmap">
+    { "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a2e);
+    const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(3, 2.5, 5);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x444466, 2));
+    const sun = new THREE.DirectionalLight(0xffffff, 2);
+    sun.position.set(5, 10, 5);
+    scene.add(sun);
+    scene.add(new THREE.GridHelper(10, 10, 0x4361ee, 0x2a2a4e));
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.5, 0);
+
+    const clock = new THREE.Clock();
+    let mixer;
+
+    new GLTFLoader().load('runner.glb', (gltf) => {
+      scene.add(gltf.scene);
+      mixer = new THREE.AnimationMixer(gltf.scene);
+      const bar = document.getElementById('bar');
+      let current;
+      gltf.animations.forEach((clip) => {
+        const btn = document.createElement('button');
+        btn.textContent = clip.name.replace('CharacterArmature|', '');
+        btn.onclick = () => {
+          if (current) current.fadeOut(0.2);
+          current = mixer.clipAction(clip).reset().fadeIn(0.2).play();
+          bar.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        };
+        bar.appendChild(btn);
+        if (clip.name.endsWith('|Run')) btn.click();
+      });
+    });
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    renderer.setAnimationLoop(() => {
+      if (mixer) mixer.update(clock.getDelta());
+      controls.update();
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
