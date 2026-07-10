@@ -52,6 +52,21 @@ pub enum MessageStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct CreateMessage {
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+}
+
+/// Open messages in track order, ready to render as hurdles.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenMessages {
+    pub messages: Vec<Message>,
+    pub remaining_count: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HealthResponse {
     pub status: String,
 }
