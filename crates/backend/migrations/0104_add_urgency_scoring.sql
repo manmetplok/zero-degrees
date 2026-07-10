@@ -1,0 +1,2 @@
+ALTER TABLE messages ADD COLUMN rationale TEXT;
+ALTER TABLE messages ADD COLUMN point_reward INTEGER NOT NULL DEFAULT 0;

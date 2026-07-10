@@ -214,6 +214,11 @@ pub struct CategorizedMessage {
     pub status: MessageStatus,
     pub category: Category,
     pub sentiment: Sentiment,
+    pub urgency: Urgency,
+    pub point_reward: i64,
+    /// Why the AI scored this urgency; shown on the detail card.
+    #[serde(default)]
+    pub rationale: Option<String>,
     /// One-to-two-sentence AI scout report. `None` means the body was already
     /// under the summary threshold, so the client shows it directly.
     #[serde(default)]
@@ -687,4 +692,31 @@ pub struct HazardZoneDetail {
     pub zone: HazardZone,
     pub messages: Vec<Message>,
     pub briefing: String,
+}
+
+impl Urgency {
+    pub const ALL: [Urgency; 4] = [
+        Urgency::Critical,
+        Urgency::High,
+        Urgency::Normal,
+        Urgency::Low,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Urgency::Critical => "Critical",
+            Urgency::High => "High",
+            Urgency::Normal => "Normal",
+            Urgency::Low => "Low",
+        }
+    }
+
+    pub fn point_reward(self) -> u32 {
+        match self {
+            Urgency::Low => 10,
+            Urgency::Normal => 20,
+            Urgency::High => 50,
+            Urgency::Critical => 100,
+        }
+    }
 }

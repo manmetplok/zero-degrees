@@ -11,6 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::classifier::{Classifier, KeywordClassifier};
 use crate::sentiment::{KeywordSentimentClassifier, SentimentClassifier};
+use crate::urgency_scorer::{KeywordUrgencyScorer, UrgencyScorer};
 use crate::summarizer::{summary_for, MockSummarizer};
 
 #[derive(sqlx::FromRow)]
@@ -25,6 +26,9 @@ struct MessageRow {
     ai_category: String,
     manual_category: Option<String>,
     sentiment: String,
+    urgency: String,
+    point_reward: i64,
+    rationale: Option<String>,
     summary: Option<String>,
 }
 
@@ -117,6 +121,7 @@ fn to_categorized(row: MessageRow) -> Result<CategorizedMessage, Status> {
         None => ai_category,
     };
     let sentiment = sentiment_from_str(&row.sentiment).ok_or(Status::InternalServerError)?;
+    let urgency = crate::urgency::from_str(&row.urgency).ok_or(Status::InternalServerError)?;
     Ok(CategorizedMessage {
         id: row.id,
         channel,
@@ -127,6 +132,9 @@ fn to_categorized(row: MessageRow) -> Result<CategorizedMessage, Status> {
         status,
         category,
         sentiment,
+        urgency,
+        point_reward: row.point_reward,
+        rationale: row.rationale,
         summary: row.summary,
     })
 }
@@ -139,7 +147,7 @@ fn now_unix() -> i64 {
 }
 
 const SELECT_COLUMNS: &str =
-    "id, channel, sender, subject, body, received_at, status, ai_category, manual_category, sentiment, summary";
+    "id, channel, sender, subject, body, received_at, status, ai_category, manual_category, sentiment, urgency, point_reward, rationale, summary";
 
 #[post("/messages", data = "<body>")]
 pub async fn create(
@@ -148,10 +156,11 @@ pub async fn create(
 ) -> Result<status::Created<Json<CategorizedMessage>>, Status> {
     let category = KeywordClassifier.classify(&body.subject, &body.body);
     let sentiment = KeywordSentimentClassifier.classify(&body.subject, &body.body);
+    let score = KeywordUrgencyScorer.score(&body.subject, &body.body);
     let summary = summary_for(&body.body, &MockSummarizer);
     let query = format!(
-        "INSERT INTO messages (channel, sender, subject, body, received_at, status, ai_category, sentiment, summary) \
-         VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?) RETURNING {SELECT_COLUMNS}"
+        "INSERT INTO messages (channel, sender, subject, body, received_at, status, ai_category, sentiment, urgency, point_reward, rationale, summary) \
+         VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?) RETURNING {SELECT_COLUMNS}"
     );
     let row = sqlx::query_as::<_, MessageRow>(&query)
         .bind(channel_to_str(body.channel))
@@ -161,6 +170,9 @@ pub async fn create(
         .bind(now_unix())
         .bind(category_to_str(category))
         .bind(sentiment_to_str(sentiment))
+        .bind(crate::urgency::to_str(score.urgency))
+        .bind(score.urgency.point_reward() as i64)
+        .bind(&score.rationale)
         .bind(&summary)
         .fetch_one(pool.inner())
         .await

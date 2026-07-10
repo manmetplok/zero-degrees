@@ -1,6 +1,6 @@
 use rocket::http::Status;
 use rocket::local::asynchronous::Client;
-use shared::{Sentiment, 
+use shared::{Sentiment, Urgency, 
     CategorizedMessage, Category, Channel, CreateMessage, MessageStatus, OpenMessages,
     SetMessageCategory,
 };
@@ -232,4 +232,35 @@ async fn list_with_unknown_sentiment_is_rejected() {
     let (client, _pool) = client_and_pool().await;
     let response = client.get("/messages?sentiment=confused").dispatch().await;
     assert_eq!(response.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+async fn create_scores_urgency_and_point_reward() {
+    let (client, _pool) = client_and_pool().await;
+    let critical = create_message(
+        &client,
+        CreateMessage {
+            channel: Channel::Ticket,
+            sender: "ops@example.com".into(),
+            subject: "Our service is down".into(),
+            body: "Production is down for all users, this is urgent.".into(),
+        },
+    )
+    .await;
+    assert_eq!(critical.urgency, Urgency::Critical);
+    assert_eq!(critical.point_reward, 100);
+    assert!(critical.rationale.is_some());
+
+    let low = create_message(
+        &client,
+        CreateMessage {
+            channel: Channel::Email,
+            sender: "fyi@example.com".into(),
+            subject: "FYI".into(),
+            body: "For your information, no action needed.".into(),
+        },
+    )
+    .await;
+    assert_eq!(low.urgency, Urgency::Low);
+    assert_eq!(low.point_reward, 10);
 }

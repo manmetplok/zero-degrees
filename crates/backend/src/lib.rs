@@ -26,6 +26,7 @@ pub mod summarizer;
 mod theme;
 mod track_objects;
 mod urgency;
+mod urgency_scorer;
 mod trophies;
 mod xp;
 
