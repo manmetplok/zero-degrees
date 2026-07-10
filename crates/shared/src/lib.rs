@@ -50,3 +50,31 @@ pub enum MessageStatus {
     Cleared,
     Skipped,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HealthResponse {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ObjectLink {
+    Ticket { key: String },
+    Email { message_id: String },
+    Review { review_id: String },
+    Generic { url: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrackObject {
+    pub id: i64,
+    pub position: f64,
+    pub link: ObjectLink,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateTrackObject {
+    pub position: f64,
+    pub link: ObjectLink,
+}
