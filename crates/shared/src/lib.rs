@@ -78,3 +78,59 @@ pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
 }
+
+/// A message's topic, assigned by AI at ingestion and overridable by a player.
+/// Drives the hurdle's visual type on the track.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Category {
+    Billing,
+    Complaint,
+    Question,
+    Feedback,
+}
+
+impl Category {
+    pub const ALL: [Category; 4] = [
+        Category::Billing,
+        Category::Complaint,
+        Category::Question,
+        Category::Feedback,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Category::Billing => "Billing",
+            Category::Complaint => "Complaint",
+            Category::Question => "Question",
+            Category::Feedback => "Feedback",
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateMessage {
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+}
+
+/// A message as persisted by the backend, with its current effective category.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CategorizedMessage {
+    pub id: i64,
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+    pub status: MessageStatus,
+    pub category: Category,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SetMessageCategory {
+    pub category: Category,
+}
