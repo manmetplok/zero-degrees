@@ -51,6 +51,22 @@ pub enum MessageStatus {
     Skipped,
 }
 
+/// One hit from the binoculars search/filter endpoint.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MessageSearchResult {
+    pub id: i64,
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+    pub status: MessageStatus,
+    pub category: Option<String>,
+    pub sentiment: Option<Sentiment>,
+    pub urgency: Option<Urgency>,
+    pub summary: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMessage {
     pub channel: Channel,

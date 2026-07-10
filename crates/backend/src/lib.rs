@@ -13,6 +13,7 @@ mod feedback;
 mod leaderboard;
 pub mod messages;
 mod routes;
+mod search;
 mod seeding;
 pub mod summarizer;
 mod track_objects;
@@ -61,6 +62,7 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 drafts::latest,
                 drafts::recharge,
                 demo::seed,
+                search::search,
             ],
         )
 }
