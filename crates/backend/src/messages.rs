@@ -4,12 +4,13 @@ use rocket::serde::json::Json;
 use rocket::State;
 use shared::{
     CategorizedMessage, Category, Channel, CreateMessage, Message, MessageDetail, MessageStatus,
-    OpenMessages, SaveDraftRequest, SendReplyRequest, SetMessageCategory,
+    OpenMessages, SaveDraftRequest, SendReplyRequest, Sentiment, SetMessageCategory,
 };
 use sqlx::SqlitePool;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::classifier::{Classifier, KeywordClassifier};
+use crate::sentiment::{KeywordSentimentClassifier, SentimentClassifier};
 use crate::summarizer::{summary_for, MockSummarizer};
 
 #[derive(sqlx::FromRow)]
@@ -23,7 +24,27 @@ struct MessageRow {
     status: String,
     ai_category: String,
     manual_category: Option<String>,
+    sentiment: String,
     summary: Option<String>,
+}
+
+pub(crate) fn sentiment_to_str(sentiment: Sentiment) -> &'static str {
+    match sentiment {
+        Sentiment::Positive => "positive",
+        Sentiment::Neutral => "neutral",
+        Sentiment::Negative => "negative",
+        Sentiment::Angry => "angry",
+    }
+}
+
+pub(crate) fn sentiment_from_str(value: &str) -> Option<Sentiment> {
+    match value {
+        "positive" => Some(Sentiment::Positive),
+        "neutral" => Some(Sentiment::Neutral),
+        "negative" => Some(Sentiment::Negative),
+        "angry" => Some(Sentiment::Angry),
+        _ => None,
+    }
 }
 
 pub(crate) fn channel_to_str(channel: Channel) -> &'static str {
@@ -95,6 +116,7 @@ fn to_categorized(row: MessageRow) -> Result<CategorizedMessage, Status> {
         Some(manual) => category_from_str(manual).ok_or(Status::InternalServerError)?,
         None => ai_category,
     };
+    let sentiment = sentiment_from_str(&row.sentiment).ok_or(Status::InternalServerError)?;
     Ok(CategorizedMessage {
         id: row.id,
         channel,
@@ -104,6 +126,7 @@ fn to_categorized(row: MessageRow) -> Result<CategorizedMessage, Status> {
         received_at: row.received_at,
         status,
         category,
+        sentiment,
         summary: row.summary,
     })
 }
@@ -116,7 +139,7 @@ fn now_unix() -> i64 {
 }
 
 const SELECT_COLUMNS: &str =
-    "id, channel, sender, subject, body, received_at, status, ai_category, manual_category, summary";
+    "id, channel, sender, subject, body, received_at, status, ai_category, manual_category, sentiment, summary";
 
 #[post("/messages", data = "<body>")]
 pub async fn create(
@@ -124,10 +147,11 @@ pub async fn create(
     body: Json<CreateMessage>,
 ) -> Result<status::Created<Json<CategorizedMessage>>, Status> {
     let category = KeywordClassifier.classify(&body.subject, &body.body);
+    let sentiment = KeywordSentimentClassifier.classify(&body.subject, &body.body);
     let summary = summary_for(&body.body, &MockSummarizer);
     let query = format!(
-        "INSERT INTO messages (channel, sender, subject, body, received_at, status, ai_category, summary) \
-         VALUES (?, ?, ?, ?, ?, 'open', ?, ?) RETURNING {SELECT_COLUMNS}"
+        "INSERT INTO messages (channel, sender, subject, body, received_at, status, ai_category, sentiment, summary) \
+         VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?) RETURNING {SELECT_COLUMNS}"
     );
     let row = sqlx::query_as::<_, MessageRow>(&query)
         .bind(channel_to_str(body.channel))
@@ -136,6 +160,7 @@ pub async fn create(
         .bind(&body.body)
         .bind(now_unix())
         .bind(category_to_str(category))
+        .bind(sentiment_to_str(sentiment))
         .bind(&summary)
         .fetch_one(pool.inner())
         .await
@@ -145,10 +170,24 @@ pub async fn create(
     Ok(status::Created::new(location).body(Json(message)))
 }
 
-#[get("/messages")]
-pub async fn list(pool: &State<SqlitePool>) -> Result<Json<Vec<CategorizedMessage>>, Status> {
-    let query = format!("SELECT {SELECT_COLUMNS} FROM messages ORDER BY id");
-    let rows = sqlx::query_as::<_, MessageRow>(&query)
+#[get("/messages?<sentiment>")]
+pub async fn list(
+    pool: &State<SqlitePool>,
+    sentiment: Option<String>,
+) -> Result<Json<Vec<CategorizedMessage>>, Status> {
+    let sentiment = match sentiment {
+        Some(value) => Some(sentiment_from_str(&value).ok_or(Status::BadRequest)?),
+        None => None,
+    };
+    let query = match sentiment {
+        Some(_) => format!("SELECT {SELECT_COLUMNS} FROM messages WHERE sentiment = ? ORDER BY id"),
+        None => format!("SELECT {SELECT_COLUMNS} FROM messages ORDER BY id"),
+    };
+    let mut q = sqlx::query_as::<_, MessageRow>(&query);
+    if let Some(sentiment) = sentiment {
+        q = q.bind(sentiment_to_str(sentiment));
+    }
+    let rows = q
         .fetch_all(pool.inner())
         .await
         .map_err(|_| Status::InternalServerError)?;

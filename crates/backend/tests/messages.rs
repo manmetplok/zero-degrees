@@ -1,6 +1,6 @@
 use rocket::http::Status;
 use rocket::local::asynchronous::Client;
-use shared::{
+use shared::{Sentiment, 
     CategorizedMessage, Category, Channel, CreateMessage, MessageStatus, OpenMessages,
     SetMessageCategory,
 };
@@ -183,4 +183,53 @@ async fn override_unknown_message_returns_not_found() {
         .dispatch()
         .await;
     assert_eq!(response.status(), Status::NotFound);
+}
+
+#[rocket::async_test]
+async fn create_classifies_sentiment_at_ingestion() {
+    let (client, _pool) = client_and_pool().await;
+    let created = create_message(
+        &client,
+        CreateMessage {
+            channel: Channel::Email,
+            sender: "angry@example.com".into(),
+            subject: "This is unacceptable".into(),
+            body: "I am furious about this outrageous service.".into(),
+        },
+    )
+    .await;
+    assert_eq!(created.sentiment, Sentiment::Angry);
+}
+
+#[rocket::async_test]
+async fn list_filters_by_sentiment() {
+    let (client, _pool) = client_and_pool().await;
+    create_message(
+        &client,
+        CreateMessage {
+            channel: Channel::Email,
+            sender: "angry@example.com".into(),
+            subject: "This is unacceptable".into(),
+            body: "I am furious about this outrageous service.".into(),
+        },
+    )
+    .await;
+    create_message(&client, message_body(Channel::Email, "calm@example.com")).await;
+
+    let filtered: Vec<CategorizedMessage> = client
+        .get("/messages?sentiment=angry")
+        .dispatch()
+        .await
+        .into_json()
+        .await
+        .unwrap();
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].sender, "angry@example.com");
+}
+
+#[rocket::async_test]
+async fn list_with_unknown_sentiment_is_rejected() {
+    let (client, _pool) = client_and_pool().await;
+    let response = client.get("/messages?sentiment=confused").dispatch().await;
+    assert_eq!(response.status(), Status::BadRequest);
 }

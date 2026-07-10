@@ -14,6 +14,7 @@ mod leaderboard;
 pub mod messages;
 mod routes;
 mod search;
+mod sentiment;
 mod seeding;
 pub mod summarizer;
 mod track_objects;
