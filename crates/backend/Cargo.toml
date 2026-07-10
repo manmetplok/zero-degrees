@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+chrono = "0.4"
 rand = "0.8"
 rocket = { version = "0.5", features = ["json"] }
 shared = { path = "../shared" }

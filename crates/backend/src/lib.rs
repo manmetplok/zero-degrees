@@ -7,6 +7,7 @@ mod classifier;
 mod combo;
 mod course_generator;
 pub mod db;
+mod daily_run;
 mod demo;
 mod draft_writer;
 mod drafts;
@@ -23,6 +24,7 @@ mod scoring;
 mod search;
 mod sentiment;
 mod seeding;
+mod streak;
 pub mod summarizer;
 mod theme;
 mod track_objects;
@@ -57,6 +59,8 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
                 messages::list,
                 messages::list_open,
                 messages::list_open_prioritized,
+                daily_run::status,
+                daily_run::report_progress,
                 messages::set_category,
                 feedback::create,
                 feedback::aggregate,

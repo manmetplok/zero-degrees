@@ -729,3 +729,18 @@ pub struct OpenMessage {
     pub sentiment: Sentiment,
     pub priority: f64,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct DailyRunStatus {
+    pub current_streak: u32,
+    pub best_streak: u32,
+    pub has_shield: bool,
+    pub daily_goal_xp: u32,
+    pub today_progress_xp: u32,
+    pub goal_met_today: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ReportDailyProgress {
+    pub xp_earned: u32,
+}
