@@ -6,6 +6,7 @@ mod classifier;
 mod combo;
 pub mod db;
 mod feedback;
+mod leaderboard;
 pub mod messages;
 mod routes;
 pub mod summarizer;
@@ -41,6 +42,7 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
             assignments::claim,
             assignments::lane,
             assignments::notifications,
+            leaderboard::get,
         ],
     )
 }
