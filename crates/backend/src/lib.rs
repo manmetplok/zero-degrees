@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+mod classifier;
 pub mod db;
 mod feedback;
 mod messages;
@@ -19,7 +20,9 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
             track_objects::list,
             track_objects::delete,
             messages::create,
+            messages::list,
             messages::list_open,
+            messages::set_category,
             feedback::create,
             feedback::aggregate,
         ],
