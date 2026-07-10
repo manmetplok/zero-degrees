@@ -78,3 +78,36 @@ pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LeaderboardPeriod {
+    Today,
+    ThisWeek,
+    AllTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LeaderboardEntry {
+    pub rank: i64,
+    pub player_id: i64,
+    pub device_id: String,
+    pub xp: i64,
+    pub streak: i64,
+    pub badge_count: i64,
+    pub avg_response_seconds: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TeamTotals {
+    pub xp: i64,
+    pub clears: i64,
+    pub incoming_volume: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LeaderboardResponse {
+    pub period: LeaderboardPeriod,
+    pub team: TeamTotals,
+    pub entries: Vec<LeaderboardEntry>,
+}
