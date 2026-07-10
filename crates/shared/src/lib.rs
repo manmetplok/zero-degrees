@@ -78,3 +78,56 @@ pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
 }
+
+/// AI sentiment classification for a message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Sentiment {
+    Positive,
+    Neutral,
+    Negative,
+    Angry,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChannelCount {
+    pub channel: Channel,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CategoryCount {
+    pub category: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SentimentCount {
+    pub sentiment: Sentiment,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HazardZoneSummary {
+    pub name: String,
+    pub message_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RunnerProgress {
+    pub device_id: String,
+    pub clears: i64,
+}
+
+/// Aggregated race-control overview: hurdle counts and distributions plus per-runner progress.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RaceControlStats {
+    pub open_count: i64,
+    pub cleared_count: i64,
+    pub overdue_count: i64,
+    pub channel_volume: Vec<ChannelCount>,
+    pub category_distribution: Vec<CategoryCount>,
+    pub sentiment_breakdown: Vec<SentimentCount>,
+    pub hazard_zones: Vec<HazardZoneSummary>,
+    pub runner_progress: Vec<RunnerProgress>,
+}
