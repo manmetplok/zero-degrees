@@ -1,11 +1,12 @@
 #[macro_use]
 extern crate rocket;
 
+mod assignments;
 mod classifier;
 mod combo;
 pub mod db;
 mod feedback;
-mod messages;
+pub mod messages;
 mod routes;
 pub mod summarizer;
 mod track_objects;
@@ -35,6 +36,11 @@ pub fn rocket(pool: SqlitePool) -> Rocket<Build> {
             trophies::list_progress,
             xp::clear,
             xp::progress,
+            assignments::get_message,
+            assignments::assign,
+            assignments::claim,
+            assignments::lane,
+            assignments::notifications,
         ],
     )
 }

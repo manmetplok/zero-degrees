@@ -26,7 +26,7 @@ struct MessageRow {
     summary: Option<String>,
 }
 
-fn channel_to_str(channel: Channel) -> &'static str {
+pub(crate) fn channel_to_str(channel: Channel) -> &'static str {
     match channel {
         Channel::Email => "email",
         Channel::WebForm => "web_form",
@@ -35,7 +35,7 @@ fn channel_to_str(channel: Channel) -> &'static str {
     }
 }
 
-fn channel_from_str(value: &str) -> Option<Channel> {
+pub(crate) fn channel_from_str(value: &str) -> Option<Channel> {
     match value {
         "email" => Some(Channel::Email),
         "web_form" => Some(Channel::WebForm),
@@ -45,7 +45,7 @@ fn channel_from_str(value: &str) -> Option<Channel> {
     }
 }
 
-fn status_from_str(value: &str) -> Option<MessageStatus> {
+pub(crate) fn status_from_str(value: &str) -> Option<MessageStatus> {
     match value {
         "open" => Some(MessageStatus::Open),
         "cleared" => Some(MessageStatus::Cleared),
@@ -197,4 +197,28 @@ pub async fn set_category(
         .ok_or(Status::NotFound)?;
     let message = to_categorized(row)?;
     Ok(Json(message))
+}
+
+pub struct NewMessage {
+    pub channel: Channel,
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub received_at: i64,
+}
+
+pub async fn insert(pool: &SqlitePool, new: NewMessage) -> i64 {
+    let (id,): (i64,) = sqlx::query_as(
+        "INSERT INTO messages (channel, sender, subject, body, received_at, status) \
+         VALUES (?, ?, ?, ?, ?, 'open') RETURNING id",
+    )
+    .bind(channel_to_str(new.channel))
+    .bind(new.sender)
+    .bind(new.subject)
+    .bind(new.body)
+    .bind(new.received_at)
+    .fetch_one(pool)
+    .await
+    .expect("insert message failed");
+    id
 }
