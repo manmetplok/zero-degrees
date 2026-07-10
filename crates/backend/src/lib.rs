@@ -2,11 +2,12 @@
 extern crate rocket;
 
 mod classifier;
-pub mod db;
 mod combo;
+pub mod db;
 mod feedback;
 mod messages;
 mod routes;
+pub mod summarizer;
 mod track_objects;
 mod trophies;
 mod xp;

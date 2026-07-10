@@ -197,6 +197,10 @@ pub struct CategorizedMessage {
     pub received_at: i64,
     pub status: MessageStatus,
     pub category: Category,
+    /// One-to-two-sentence AI scout report. `None` means the body was already
+    /// under the summary threshold, so the client shows it directly.
+    #[serde(default)]
+    pub summary: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

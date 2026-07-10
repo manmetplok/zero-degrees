@@ -137,6 +137,42 @@ async fn override_category_wins_over_ai_category_and_persists() {
 }
 
 #[rocket::async_test]
+async fn short_message_gets_no_summary() {
+    let (client, _pool) = client_and_pool().await;
+    let created = create_message(&client, message_body(Channel::Email, "short")).await;
+    assert_eq!(created.summary, None);
+}
+
+#[rocket::async_test]
+async fn long_message_gets_persisted_summary() {
+    let (client, _pool) = client_and_pool().await;
+    let long_body = "This is the first sentence of a long complaint. This is the second one. "
+        .repeat(5);
+    let created = create_message(
+        &client,
+        CreateMessage {
+            channel: Channel::Email,
+            sender: "long@example.com".into(),
+            subject: "Long message".into(),
+            body: long_body.clone(),
+        },
+    )
+    .await;
+    let summary = created.summary.expect("long message should get a summary");
+    assert!(!summary.is_empty());
+    assert!(summary.len() < long_body.len());
+
+    let messages: Vec<CategorizedMessage> = client
+        .get("/messages")
+        .dispatch()
+        .await
+        .into_json()
+        .await
+        .unwrap();
+    assert_eq!(messages[0].summary.as_deref(), Some(summary.as_str()));
+}
+
+#[rocket::async_test]
 async fn override_unknown_message_returns_not_found() {
     let (client, _pool) = client_and_pool().await;
     let response = client

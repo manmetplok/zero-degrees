@@ -10,6 +10,7 @@ use sqlx::SqlitePool;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::classifier::{Classifier, KeywordClassifier};
+use crate::summarizer::{summary_for, MockSummarizer};
 
 #[derive(sqlx::FromRow)]
 struct MessageRow {
@@ -22,6 +23,7 @@ struct MessageRow {
     status: String,
     ai_category: String,
     manual_category: Option<String>,
+    summary: Option<String>,
 }
 
 fn channel_to_str(channel: Channel) -> &'static str {
@@ -102,6 +104,7 @@ fn to_categorized(row: MessageRow) -> Result<CategorizedMessage, Status> {
         received_at: row.received_at,
         status,
         category,
+        summary: row.summary,
     })
 }
 
@@ -113,7 +116,7 @@ fn now_unix() -> i64 {
 }
 
 const SELECT_COLUMNS: &str =
-    "id, channel, sender, subject, body, received_at, status, ai_category, manual_category";
+    "id, channel, sender, subject, body, received_at, status, ai_category, manual_category, summary";
 
 #[post("/messages", data = "<body>")]
 pub async fn create(
@@ -121,9 +124,10 @@ pub async fn create(
     body: Json<CreateMessage>,
 ) -> Result<status::Created<Json<CategorizedMessage>>, Status> {
     let category = KeywordClassifier.classify(&body.subject, &body.body);
+    let summary = summary_for(&body.body, &MockSummarizer);
     let query = format!(
-        "INSERT INTO messages (channel, sender, subject, body, received_at, status, ai_category) \
-         VALUES (?, ?, ?, ?, ?, 'open', ?) RETURNING {SELECT_COLUMNS}"
+        "INSERT INTO messages (channel, sender, subject, body, received_at, status, ai_category, summary) \
+         VALUES (?, ?, ?, ?, ?, 'open', ?, ?) RETURNING {SELECT_COLUMNS}"
     );
     let row = sqlx::query_as::<_, MessageRow>(&query)
         .bind(channel_to_str(body.channel))
@@ -132,6 +136,7 @@ pub async fn create(
         .bind(&body.body)
         .bind(now_unix())
         .bind(category_to_str(category))
+        .bind(&summary)
         .fetch_one(pool.inner())
         .await
         .map_err(|_| Status::InternalServerError)?;
