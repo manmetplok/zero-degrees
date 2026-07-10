@@ -31,7 +31,7 @@ impl Channel {
 }
 
 /// An incoming customer message. One open message = one hurdle on the track.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub id: u64,
     pub channel: Channel,
@@ -77,4 +77,22 @@ pub struct TrackObject {
 pub struct CreateTrackObject {
     pub position: f64,
     pub link: ObjectLink,
+}
+
+/// A recurring theme detected across many open/recent messages.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HazardZone {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub message_count: usize,
+    pub message_ids: Vec<u64>,
+}
+
+/// A hazard zone with its member messages and an AI-written root-cause briefing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HazardZoneDetail {
+    pub zone: HazardZone,
+    pub messages: Vec<Message>,
+    pub briefing: String,
 }
